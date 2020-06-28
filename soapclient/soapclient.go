@@ -22,9 +22,10 @@ import (
 var DebugSoapResponse = false
 
 type soapClientOption struct {
-	headers    map[string]string
-	tlsOptions *definations.TLSOptions
-	proxies    *definations.Proxies
+	headers        map[string]string
+	tlsOptions     *definations.TLSOptions
+	proxies        *definations.Proxies
+	timeoutSeconds int
 }
 
 // ClientOption options
@@ -51,7 +52,8 @@ func defaultSOAPClientOption() soapClientOption {
 		headers: map[string]string{
 			"Content-Type": "text/xml; charset=\"utf-8\"",
 		},
-		tlsOptions: nil,
+		tlsOptions:     nil,
+		timeoutSeconds: 30,
 	}
 }
 
@@ -82,6 +84,13 @@ func WithHTTPTLSOptions(tlsOptions *definations.TLSOptions) ClientOption {
 func WithHTTPProxies(proxies *definations.Proxies) ClientOption {
 	return newFuncSOAPClientOption(func(o *soapClientOption) {
 		o.proxies = proxies
+	})
+}
+
+// WithTimeoutSeconds options
+func WithTimeoutSeconds(timeoutSeconds int) ClientOption {
+	return newFuncSOAPClientOption(func(o *soapClientOption) {
+		o.timeoutSeconds = timeoutSeconds
 	})
 }
 
@@ -159,7 +168,7 @@ func NewSOAPClient(endpoint string, options ...ClientOption) (*SOAPClient, error
 		proxyURL, _ := url.Parse(opts.proxies.FetchProxyURL(endpoint))
 		tr.Proxy = http.ProxyURL(proxyURL)
 	}
-	client := &http.Client{Transport: tr}
+	client := &http.Client{Transport: tr, Timeout: time.Second * time.Duration(opts.timeoutSeconds)}
 
 	c = &SOAPClient{
 		client:    client,
