@@ -16,9 +16,11 @@ import (
 
 // DBRestfulConfig config block
 type DBRestfulConfig struct {
-	API     string                 `yaml:"api"`
-	Enabled bool                   `yaml:"enabled"`
-	TLS     definations.TLSOptions `yaml:"tls"`
+	API      string                 `yaml:"api"`
+	Enabled  bool                   `yaml:"enabled"`
+	TLS      definations.TLSOptions `yaml:"tls"`
+	UserName string                 `yaml:"username"`
+	Password string                 `yaml:"password"`
 }
 
 // Server config block
