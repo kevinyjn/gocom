@@ -6,10 +6,12 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 
 	"github.com/kevinyjn/gocom/definations"
@@ -142,6 +144,33 @@ func HTTPGetJSON(queryURL string, params *map[string]string, options ...ClientOp
 	}
 
 	return result, nil
+}
+
+// HTTPGetJSONList request get json value list
+func HTTPGetJSONList(queryURL string, params *map[string]interface{}, options ...ClientOption) ([]byte, error) {
+	if params != nil {
+		v := url.Values{}
+		for pk, pv := range *params {
+			if reflect.TypeOf(pv).Kind() == reflect.Map {
+				for mk, mv := range pv.(map[string]interface{}) {
+					vk := fmt.Sprintf(pk+"[%v]", mk)
+					v.Add(vk, mv.(string))
+				}
+			} else {
+				v.Add(pk, pv.(string))
+			}
+		}
+		urlParams := v.Encode()
+		if urlParams != "" {
+			sep := "?"
+			if strings.Contains(queryURL, "?") {
+				sep = "&"
+			}
+			queryURL = queryURL + sep + urlParams
+		}
+	}
+	logger.Trace.Printf("HTTPGetJSONList queryURL: %s", queryURL)
+	return HTTPQuery("GET", queryURL, nil, options...)
 }
 
 // HTTPPostJSON request and response as json
