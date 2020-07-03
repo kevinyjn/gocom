@@ -45,12 +45,13 @@ type MQConsumerMessage struct {
 
 // MQPublishMessage publish message
 type MQPublishMessage struct {
-	Body          []byte       `json:"body"`
-	RoutingKey    string       `json:"routingKey"`
-	CorrelationID string       `json:"correlationId"`
-	ReplyTo       string       `json:"replyTo"`
-	PublishStatus chan MQEvent `json:"-"`
-	EventLabel    string       `json:"eventLabel"`
+	Body          []byte            `json:"body"`
+	RoutingKey    string            `json:"routingKey"`
+	CorrelationID string            `json:"correlationId"`
+	ReplyTo       string            `json:"replyTo"`
+	PublishStatus chan MQEvent      `json:"-"`
+	EventLabel    string            `json:"eventLabel"`
+	Headers       map[string]string `json:"headers"`
 }
 
 // MQConsumerCallback callback

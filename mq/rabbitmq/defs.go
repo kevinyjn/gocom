@@ -51,6 +51,7 @@ type RabbitPublishingMsg struct {
 	ReplyTo       string             `json:"replyTo"`
 	PublishStatus chan mqenv.MQEvent `json:"-"`
 	EventLabel    string             `json:"eventLabel"`
+	Headers       map[string]string  `json:"headers"`
 }
 
 // RabbitQueueStatus queue status

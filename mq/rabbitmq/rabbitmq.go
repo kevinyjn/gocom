@@ -177,15 +177,15 @@ func (r *RabbitMQ) Run() {
 			logger.Info.Printf("consuming queue: %s\n", cm.Queue)
 			r.consume(cm)
 		case err := <-r.Done:
-			logger.Error.Printf("RabbitMQ connection:%s done with error:%s", r.Name, err.Error())
+			logger.Error.Printf("RabbitMQ connection:%s done with error:%v", r.Name, err)
 			r.queueName = ""
 			r.close()
 		case err := <-r.connClosed:
-			logger.Error.Printf("RabbitMQ connection:%s closed with error:%s", r.Name, err.Error())
+			logger.Error.Printf("RabbitMQ connection:%s closed with error:%v", r.Name, err)
 			r.queueName = ""
 			r.close()
 		case err := <-r.channelClosed:
-			logger.Error.Printf("RabbitMQ channel:%s closed with error:%s", r.Name, err.Error())
+			logger.Error.Printf("RabbitMQ channel:%s closed with error:%v", r.Name, err)
 			r.queueName = ""
 			r.close()
 		case <-r.Close:
@@ -285,13 +285,17 @@ func (r *RabbitMQ) publish(pm *RabbitPublishingMsg) error {
 	}
 	logger.Trace.Printf("publishing %dB body (%s)", len(pm.Body), pm.Body)
 
+	headers := amqp.Table{}
+	for k, v := range pm.Headers {
+		headers[k] = v
+	}
 	err := r.Channel.Publish(
 		r.Config.ExchangeName, // publish to an exchange
 		pm.RoutingKey,         // routing to 0 or more queues
 		false,                 // mandatory
 		false,                 // immediate
 		amqp.Publishing{
-			Headers:         amqp.Table{},
+			Headers:         headers,
 			ContentType:     "application/json",
 			ContentEncoding: "",
 			Body:            pm.Body,
@@ -407,6 +411,7 @@ func GenerateRabbitMQPublishMessage(publishMsg *mqenv.MQPublishMessage) *RabbitP
 		ReplyTo:       publishMsg.ReplyTo,
 		PublishStatus: publishMsg.PublishStatus,
 		EventLabel:    publishMsg.EventLabel,
+		Headers:       publishMsg.Headers,
 	}
 	return msg
 }
