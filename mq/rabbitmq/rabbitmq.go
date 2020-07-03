@@ -353,14 +353,18 @@ func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliver
 			d.Body,
 		)
 		// fmt.Println("---- got delivery message d:", d)
-		if cb != nil {
-			cb(d)
-		}
-		if autoAck == false {
-			d.Ack(false)
-		}
+		go handleConsumeCallback(d, cb, autoAck)
 	}
 	r.Done <- fmt.Errorf("error: deliveries channel closed")
+}
+
+func handleConsumeCallback(d amqp.Delivery, cb AMQPConsumerCallback, autoAck bool) {
+	if cb != nil {
+		cb(d)
+	}
+	if autoAck == false {
+		d.Ack(false)
+	}
 }
 
 // GenerateRabbitMQConsumerProxy generate rabbitmq consumer proxy
