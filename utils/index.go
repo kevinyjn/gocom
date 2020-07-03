@@ -486,3 +486,23 @@ func IsStringMapEquals(src, dst map[string]string) bool {
 	}
 	return equals
 }
+
+// RemoveItemFromList remove element from list
+func RemoveItemFromList(v string, l []string) []string {
+	for i, e := range l {
+		if v == e {
+			l = append(l[0:i], l[i+1:]...)
+		}
+	}
+	return l
+}
+
+// IsInList whether a value is in the list
+func IsInList(key int, list []int) bool {
+	for _, v := range list {
+		if v == key {
+			return true
+		}
+	}
+	return false
+}
