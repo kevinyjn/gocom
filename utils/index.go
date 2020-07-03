@@ -365,7 +365,7 @@ func ConvertObjectToMapData(v interface{}, tag string) map[string]interface{} {
 }
 
 // CopyObjectSimply copy object
-func CopyObjectSimply(src interface{}, dst interface{}) {
+func CopyObjectSimply(src interface{}, dst interface{}, skipEmpty bool) {
 	srcValue := reflect.ValueOf(src)
 	dstValue := reflect.ValueOf(dst)
 	if srcValue.Type().Kind() == reflect.Ptr {
@@ -380,7 +380,36 @@ func CopyObjectSimply(src interface{}, dst interface{}) {
 			f := dstValue.Field(i)
 			srcField := srcValue.FieldByName(dstValue.Type().Field(i).Name)
 			if srcField.IsValid() {
+				if skipEmpty && srcField.IsZero() {
+					continue
+				}
 				f.Set(srcField)
+			}
+		}
+	}
+}
+
+// CopyMapperDataToObject copy data
+func CopyMapperDataToObject(src map[string]interface{}, dst interface{}) {
+	dstValue := reflect.ValueOf(dst)
+	if dstValue.Type().Kind() == reflect.Ptr {
+		dstValue = dstValue.Elem()
+	}
+
+	if dstValue.Type().Kind() == reflect.Struct {
+		for i := 0; i < dstValue.NumField(); i++ {
+			f := dstValue.Field(i)
+			tagValue := dstValue.Type().Field(i).Tag.Get("json")
+			if "" != tagValue {
+				keyName := strings.SplitN(tagValue, ",", 1)[0]
+				if "-" == keyName {
+					continue
+				}
+
+				v, ok := src[keyName]
+				if ok {
+					f.Set(reflect.ValueOf(v))
+				}
 			}
 		}
 	}

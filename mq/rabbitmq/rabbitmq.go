@@ -283,7 +283,7 @@ func (r *RabbitMQ) publish(pm *RabbitPublishingMsg) error {
 		r.pendingPublishes = append(r.pendingPublishes, pm)
 		return nil
 	}
-	logger.Trace.Printf("publishing %dB body (%s)", len(pm.Body), pm.Body)
+	// logger.Trace.Printf("publishing %dB body (%s)", len(pm.Body), pm.Body)
 
 	headers := amqp.Table{}
 	for k, v := range pm.Headers {
