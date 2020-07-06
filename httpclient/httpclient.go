@@ -16,6 +16,7 @@ import (
 
 	"github.com/kevinyjn/gocom/definations"
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/utils"
 )
 
 type httpClientOption struct {
@@ -154,10 +155,10 @@ func HTTPGetJSONList(queryURL string, params *map[string]interface{}, options ..
 			if reflect.TypeOf(pv).Kind() == reflect.Map {
 				for mk, mv := range pv.(map[string]interface{}) {
 					vk := fmt.Sprintf(pk+"[%v]", mk)
-					v.Add(vk, mv.(string))
+					v.Add(vk, utils.ToString(mv))
 				}
 			} else {
-				v.Add(pk, pv.(string))
+				v.Add(pk, utils.ToString(pv))
 			}
 		}
 		urlParams := v.Encode()
