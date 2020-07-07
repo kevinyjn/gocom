@@ -34,8 +34,28 @@ func Validate(v interface{}) error {
 		}
 
 		err := ValidateFieldValue(f, validateInfo, commentInfo)
-		if err != nil {
+		if nil != err {
 			msgs = append(msgs, err.Error())
+		}
+
+		if (reflect.Struct == f.Type().Kind() || reflect.Ptr == f.Type().Kind()) && f.CanInterface() {
+			err = Validate(f.Interface())
+			if nil != err {
+				msgs = append(msgs, err.Error())
+			}
+		} else if reflect.Slice == f.Type().Kind() {
+			l := f.Len()
+			for i := 0; i < l; i++ {
+				f2 := f.Index(i)
+				if (reflect.Struct == f2.Type().Kind() || reflect.Ptr == f2.Type().Kind()) && f2.CanInterface() {
+					err = Validate(f2.Interface())
+					if nil != err {
+						msgs = append(msgs, err.Error())
+					}
+				} else {
+					break
+				}
+			}
 		}
 	}
 

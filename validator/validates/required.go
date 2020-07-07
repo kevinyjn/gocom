@@ -13,7 +13,17 @@ func ValidateRequired(v reflect.Value, label string) error {
 			return nil
 		}
 		break
-	case reflect.Array, reflect.Map, reflect.Struct, reflect.Chan, reflect.Func:
+	case reflect.Array, reflect.Map, reflect.Slice:
+		if v.Len() > 0 {
+			return nil
+		}
+		break
+	case reflect.Struct:
+		if v.IsValid() {
+			return nil
+		}
+		break
+	case reflect.Chan, reflect.Func:
 		if !v.IsNil() {
 			return nil
 		}
