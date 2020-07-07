@@ -83,6 +83,7 @@ type RabbitMQ struct {
 	pendingPublishes []*RabbitPublishingMsg
 	connecting       bool
 	queueName        string
+	queue            *amqp.Queue
 }
 
 // RabbitRPCMQ rpc instance
@@ -112,6 +113,11 @@ func (me *AMQPConfig) Equals(to *AMQPConfig) bool {
 		me.ExchangeName == to.ExchangeName &&
 		me.ExchangeType == to.ExchangeType &&
 		me.BindingKey == to.BindingKey)
+}
+
+// IsBroadcaseExange check if the configure is fanout
+func (me *AMQPConfig) IsBroadcaseExange() bool {
+	return "fanout" == me.ExchangeType
 }
 
 // OnClosed on close event

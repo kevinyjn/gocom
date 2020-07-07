@@ -33,6 +33,7 @@ func InitRabbitMQ(mqConnName string, connCfg *mqenv.MQConnectorConfig, amqpCfg *
 			pendingConsumers: make([]*RabbitConsumerProxy, 0),
 			pendingPublishes: make([]*RabbitPublishingMsg, 0),
 			connecting:       false,
+			queue:            nil,
 		}
 		amqpInsts[mqConnName] = amqpInst
 		err := amqpInst.init()
@@ -95,7 +96,7 @@ func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error
 	durable := amqpCfg.QueueDurable
 	autoDelete := false
 	queueName := amqpCfg.Queue
-	if "fanout" == amqpCfg.ExchangeType {
+	if amqpCfg.IsBroadcaseExange() {
 		autoDelete = true
 		durable = false
 		queueName = ""
@@ -179,17 +180,21 @@ func (r *RabbitMQ) Run() {
 		case err := <-r.Done:
 			logger.Error.Printf("RabbitMQ connection:%s done with error:%v", r.Name, err)
 			r.queueName = ""
+			r.queue = nil
 			r.close()
 		case err := <-r.connClosed:
 			logger.Error.Printf("RabbitMQ connection:%s closed with error:%v", r.Name, err)
 			r.queueName = ""
+			r.queue = nil
 			r.close()
 		case err := <-r.channelClosed:
 			logger.Error.Printf("RabbitMQ channel:%s closed with error:%v", r.Name, err)
 			r.queueName = ""
+			r.queue = nil
 			r.close()
 		case <-r.Close:
 			r.queueName = ""
+			r.queue = nil
 			r.Channel.Close()
 			return
 		}
@@ -242,30 +247,12 @@ func (r *RabbitMQ) initConn() error {
 						logger.Fatal.Printf("create channel failed with error:%s", err.Error())
 						return
 					}
-					queue, err := createQueue(r.Channel, r.Config)
-					if err != nil {
-						conn.Close()
-						r.Conn = nil
-						logger.Fatal.Printf("create queue:%s failed with error:%s", r.Config.Queue, err.Error())
+					if r.Config.IsBroadcaseExange() && len(r.pendingConsumers) <= 0 {
+						break
+					}
+					err = r.ensureQueue()
+					if nil != err {
 						return
-					}
-					r.queueName = queue.Name
-					r.connClosed = conn.NotifyClose(make(chan *amqp.Error))
-					r.channelClosed = r.Channel.NotifyClose(make(chan *amqp.Error))
-					if r.pendingConsumers != nil && len(r.pendingConsumers) > 0 {
-						consumers := r.pendingConsumers
-						r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
-						for _, cm := range consumers {
-							cm.Queue = queue.Name
-							r.consume(cm)
-						}
-					}
-					if r.pendingPublishes != nil && len(r.pendingPublishes) > 0 {
-						publishes := r.pendingPublishes
-						r.pendingPublishes = make([]*RabbitPublishingMsg, 0)
-						for _, pm := range publishes {
-							r.publish(pm)
-						}
 					}
 				}
 			case <-quitTiker:
@@ -277,11 +264,50 @@ func (r *RabbitMQ) initConn() error {
 	return nil
 }
 
+func (r *RabbitMQ) ensureQueue() error {
+	if nil == r.Conn {
+		return fmt.Errorf("RabbitMQ connection were not connected when ensuring queue:%s", r.Config.Queue)
+	}
+	queue, err := createQueue(r.Channel, r.Config)
+	if err != nil {
+		r.Conn.Close()
+		r.Conn = nil
+		logger.Fatal.Printf("create queue:%s failed with error:%s", r.Config.Queue, err.Error())
+		return err
+	}
+	r.queue = queue
+	r.queueName = queue.Name
+	r.connClosed = r.Conn.NotifyClose(make(chan *amqp.Error))
+	r.channelClosed = r.Channel.NotifyClose(make(chan *amqp.Error))
+	if r.pendingConsumers != nil && len(r.pendingConsumers) > 0 {
+		consumers := r.pendingConsumers
+		r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
+		for _, cm := range consumers {
+			cm.Queue = queue.Name
+			r.consume(cm)
+		}
+	}
+	if r.pendingPublishes != nil && len(r.pendingPublishes) > 0 {
+		publishes := r.pendingPublishes
+		r.pendingPublishes = make([]*RabbitPublishingMsg, 0)
+		for _, pm := range publishes {
+			r.publish(pm)
+		}
+	}
+	return nil
+}
+
 func (r *RabbitMQ) publish(pm *RabbitPublishingMsg) error {
 	if r.Channel == nil {
 		logger.Warning.Printf("pending publishing %dB body (%s)", len(pm.Body), pm.Body)
 		r.pendingPublishes = append(r.pendingPublishes, pm)
 		return nil
+	}
+	if nil == r.queue && !r.Config.IsBroadcaseExange() {
+		err := r.ensureQueue()
+		if nil != err {
+			return err
+		}
 	}
 	// logger.Trace.Printf("publishing %dB body (%s)", len(pm.Body), pm.Body)
 
@@ -330,6 +356,13 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 		r.pendingConsumers = append(r.pendingConsumers, cm)
 		return nil
 	}
+	if nil == r.queue {
+		err := r.ensureQueue()
+		if nil != err {
+			return err
+		}
+	}
+
 	deliveries, err := r.Channel.Consume(
 		cm.Queue,       // name
 		cm.ConsumerTag, // consumerTag,

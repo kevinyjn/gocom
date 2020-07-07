@@ -6,6 +6,7 @@ import (
 	"github.com/kevinyjn/gocom/application"
 	"github.com/kevinyjn/gocom/config"
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/mq"
 
 	"github.com/kataras/iris"
 )
@@ -17,6 +18,13 @@ func main() {
 	}
 
 	logger.Init(&env.Logger)
+
+	err = mq.Init("../etc/mq.yaml", env.MQs)
+	if err != nil {
+		logger.Error.Printf("Please check the mq configuration and restart. error:%s", err.Error())
+	}
+
+	InitServiceHandler()
 
 	listenAddr := fmt.Sprintf("%s:%d", env.Server.Host, env.Server.Port)
 	logger.Info.Printf("Starting server on %s...", listenAddr)
