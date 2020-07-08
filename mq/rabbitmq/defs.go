@@ -79,6 +79,7 @@ type RabbitMQ struct {
 
 	connClosed       chan *amqp.Error
 	channelClosed    chan *amqp.Error
+	consumers        []*RabbitConsumerProxy
 	pendingConsumers []*RabbitConsumerProxy
 	pendingPublishes []*RabbitPublishingMsg
 	connecting       bool
@@ -115,8 +116,8 @@ func (me *AMQPConfig) Equals(to *AMQPConfig) bool {
 		me.BindingKey == to.BindingKey)
 }
 
-// IsBroadcaseExange check if the configure is fanout
-func (me *AMQPConfig) IsBroadcaseExange() bool {
+// IsBroadcastExange check if the configure is fanout
+func (me *AMQPConfig) IsBroadcastExange() bool {
 	return "fanout" == me.ExchangeType
 }
 
