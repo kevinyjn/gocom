@@ -181,10 +181,12 @@ func (r *RabbitMQ) Run() {
 			r.consume(cm)
 		case err := <-r.Done:
 			logger.Error.Printf("RabbitMQ connection:%s done with error:%v", r.Name, err)
-			// r.queueName = ""
-			// r.queue = nil
-			// r.close()
-			// break
+			if r.connecting == false {
+				r.queueName = ""
+				r.queue = nil
+				r.close()
+				break
+			}
 		case err := <-r.connClosed:
 			logger.Error.Printf("RabbitMQ connection:%s closed with error:%v", r.Name, err)
 			r.queueName = ""
