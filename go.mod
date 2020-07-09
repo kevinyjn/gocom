@@ -7,13 +7,15 @@ require (
 	github.com/Shopify/goreferrer v0.0.0-20181106222321-ec9c9a553398 // indirect
 	github.com/aymerick/raymond v2.0.2+incompatible // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
-	github.com/cosiner/argv v0.1.0 // indirect
+	github.com/denisenkom/go-mssqldb v0.0.0-20200620013148-b91950f658ec
 	github.com/eknkc/amber v0.0.0-20171010120322-cdade1c07385 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/flosch/pongo2 v0.0.0-20190707114632-bbf5a6c351f4 // indirect
 	github.com/fluent/fluent-logger-golang v1.5.0
-	github.com/go-delve/delve v1.4.1 // indirect
 	github.com/go-redis/redis v6.15.8+incompatible
+	github.com/go-sql-driver/mysql v1.5.0
+	github.com/go-xorm/xorm v0.7.9
+	github.com/godror/godror v0.17.0
 	github.com/gorilla/schema v1.1.0 // indirect
 	github.com/iris-contrib/blackfriday v2.0.0+incompatible // indirect
 	github.com/iris-contrib/formBinder v5.0.0+incompatible // indirect
@@ -22,8 +24,10 @@ require (
 	github.com/kataras/golog v0.0.13 // indirect
 	github.com/kataras/iris v11.1.1+incompatible
 	github.com/klauspost/compress v1.10.5 // indirect
+	github.com/lib/pq v1.7.0
 	github.com/mattn/go-colorable v0.1.7 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/microcosm-cc/bluemonday v1.0.2 // indirect
 	github.com/peterh/liner v1.2.0 // indirect
 	github.com/philhofer/fwd v1.0.0 // indirect
@@ -40,4 +44,5 @@ require (
 	golang.org/x/crypto v0.0.0-20200429183012-4b2356b1ed79
 	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
 	gopkg.in/yaml.v2 v2.3.0
+	xorm.io/core v0.7.3
 )
