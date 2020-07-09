@@ -5,7 +5,7 @@ import (
 
 	"github.com/kevinyjn/gocom/config"
 	"github.com/kevinyjn/gocom/logger"
-	"github.com/kevinyjn/gocom/schema/rdbms/dal"
+	"github.com/kevinyjn/gocom/orm/rdbms/dal"
 )
 
 func main() {

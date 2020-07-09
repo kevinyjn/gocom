@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/kevinyjn/gocom/schema/rdbms/behaviors"
-	"github.com/kevinyjn/gocom/schema/rdbms/dal"
+	"github.com/kevinyjn/gocom/orm/rdbms/behaviors"
+	"github.com/kevinyjn/gocom/orm/rdbms/dal"
 )
 
 type schemaDemo struct {
