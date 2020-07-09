@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"time"
 
 	"github.com/kevinyjn/gocom/definations"
 	"github.com/kevinyjn/gocom/logger"
@@ -77,6 +78,8 @@ func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 		logger.Error.Printf("New database connection engine with driver:%s and address:%s failed with error:%v", err, dbConfig.Driver, dbConfig.Address)
 		return nil, err
 	}
+	orm.TZLocation = time.Local
+	orm.DatabaseTZ = time.Local
 
 	if "" != dbConfig.TableNamePrefix {
 		tbMapper := core.NewPrefixMapper(core.SnakeMapper{}, dbConfig.TableNamePrefix)
