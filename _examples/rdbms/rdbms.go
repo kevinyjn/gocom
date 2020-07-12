@@ -30,9 +30,20 @@ func main() {
 
 	ele.Save(&ele)
 
+	elex := &schemaDemo{Name: "demo"}
+	elex.Fetch(elex)
+
 	ele2 := &schemaDemo{ID: 1}
 	ele2.Fetch(ele2)
 	ele2.Name = "origin_demo"
 	ele2.Save(ele2)
+
+	elex = &schemaDemo{Name: "demo"}
+	elex.Fetch(elex)
+
+	elex = &schemaDemo{Name: "origin_demo"}
+	elex.Fetch(elex)
+	elex = &schemaDemo{Name: "origin_demo"}
+	elex.Fetch(elex)
 
 }

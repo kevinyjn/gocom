@@ -424,6 +424,22 @@ func DeeplyCopyObject(src interface{}, dst interface{}) error {
 	return gob.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(dst)
 }
 
+// IsObjectEquals deeply compare two objects that if equals
+func IsObjectEquals(l interface{}, r interface{}) bool {
+	var buf1 bytes.Buffer
+	var buf2 bytes.Buffer
+	var err error
+	err = gob.NewEncoder(&buf1).Encode(l)
+	if nil != err {
+		return false
+	}
+	err = gob.NewEncoder(&buf2).Encode(r)
+	if nil != err {
+		return false
+	}
+	return bytes.Compare(buf1.Bytes(), buf2.Bytes()) == 0
+}
+
 // RandomString random string
 func RandomString(l int) string {
 	r := rand.New(rand.NewSource(time.Now().Unix()))
