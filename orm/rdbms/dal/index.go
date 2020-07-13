@@ -111,38 +111,58 @@ func (dan *DataAccessEngine) ensureDbEngine(dbDatasourceName string) (*xorm.Engi
 }
 
 // FetchAll fetch all data object from database on conditionBean
+// Nodes: there would be a max {MaxArrayCachingDurationSeconds} seconds non-syncronized to db data
+// in case inserted some records in rows that conditionBean specifies.
 func (dan *DataAccessEngine) FetchAll(condiBeans interface{}) ([]interface{}, error) {
 	records := []interface{}{}
-	_, orm, err := dan.getDbEngineWithStructureName(condiBeans)
+	structureName, orm, err := dan.getDbEngineWithStructureName(condiBeans)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%v while get database engine failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
+	}
+	cacheGroup := getCaches().group(structureName)
+	_, ok := cacheGroup.getArray(condiBeans, &records, 0, 0)
+	if true == ok {
+		logger.Trace.Printf("Fetching records by table:%s on condition:%v from cache hitted", getTableName(condiBeans), condiBeans)
+		return records, nil
 	}
 	err = queryAll(orm, condiBeans, &records, 0, 0)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%v failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
 	}
+	cacheGroup.setArray(condiBeans, records, 0, 0)
 	return records, nil
 }
 
 // FetchRecords fetch all data object from database on conditionBean and limit, offset
+// Nodes: there would be a max {MaxArrayCachingDurationSeconds} seconds non-syncronized to db data
+// in case inserted some records in rows that conditionBean specifies. while, this case would not
+// be commonly comes out because that the new record would be inserted at the tail of rows in many
+// databases
 func (dan *DataAccessEngine) FetchRecords(condiBeans interface{}, limit, offset int) ([]interface{}, error) {
 	records := []interface{}{}
 	if 0 >= limit || 0 > offset {
 		logger.Error.Printf("Fetching records by table:%s on condition:%v with limit:%d offset:%d while limit should greater than 0 and offset should not less than 0", getTableName(condiBeans), condiBeans, limit, offset)
 		return records, errors.New("limit should greater than 0 and offset should not less than 0")
 	}
-	_, orm, err := dan.getDbEngineWithStructureName(condiBeans)
+	structureName, orm, err := dan.getDbEngineWithStructureName(condiBeans)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%v while get database engine failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
+	}
+	cacheGroup := getCaches().group(structureName)
+	_, ok := cacheGroup.getArray(condiBeans, &records, limit, offset)
+	if true == ok {
+		logger.Trace.Printf("Fetching records by table:%s on condition:%v from cache hitted", getTableName(condiBeans), condiBeans)
+		return records, nil
 	}
 	err = queryAll(orm, condiBeans, &records, limit, offset)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%v failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
 	}
+	cacheGroup.setArray(condiBeans, records, limit, offset)
 	return records, nil
 }
 
@@ -155,7 +175,7 @@ func (dan *DataAccessEngine) FetchOne(bean interface{}) (bool, error) {
 		return false, err
 	}
 	cacheGroup := getCaches().group(structureName)
-	cachingBean, cachingKey, ok := cacheGroup.get(bean)
+	cachingBean, cachingKey, ok := cacheGroup.get(bean, false)
 	if ok {
 		err = utils.DeeplyCopyObject(cachingBean, bean)
 		if nil == err {
@@ -204,7 +224,7 @@ func (dan *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
 	}
 	if ok {
 		cacheGroup = getCaches().group(structureName)
-		cachingBean, _, cached := cacheGroup.get(condiBean)
+		cachingBean, _, cached := cacheGroup.get(condiBean, false)
 		if cached {
 			if utils.IsObjectEquals(cachingBean, bean) {
 				logger.Info.Printf("Saving record for condition:%v while the object not changed.", condiBean)

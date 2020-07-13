@@ -30,11 +30,15 @@ func main() {
 
 	ele.Save(&ele)
 
+	dal.GetInstance().FetchRecords(&schemaDemo{}, 20, 0)
+
 	elex := &schemaDemo{Name: "demo"}
 	elex.Fetch(elex)
 
 	ele2 := &schemaDemo{ID: 1}
 	ele2.Fetch(ele2)
+	ele3 := &schemaDemo{ID: 2}
+	ele3.Fetch(ele3)
 	ele2.Name = "origin_demo"
 	ele2.Save(ele2)
 
@@ -45,5 +49,7 @@ func main() {
 	elex.Fetch(elex)
 	elex = &schemaDemo{Name: "origin_demo"}
 	elex.Fetch(elex)
+
+	// test cleaning the outdated data
 
 }
