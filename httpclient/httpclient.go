@@ -163,7 +163,7 @@ func HTTPGetJSONList(queryURL string, params *map[string]interface{}, options ..
 		v := url.Values{}
 		for pk, pv := range *params {
 			if pk == "childRoute" {
-				queryURL += "/" + pv
+				queryURL += fmt.Sprintf("/%v", pv)
 				continue
 			}
 			if reflect.TypeOf(pv).Kind() == reflect.Map {
