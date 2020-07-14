@@ -59,7 +59,7 @@ func defaultHTTPClientJSONOptions() httpClientOption {
 			"Content-Type": "application/json",
 		},
 		tlsOptions: nil,
-		timeouts:   time.Duration(30),
+		timeouts:   time.Second * 30,
 	}
 }
 
@@ -114,7 +114,7 @@ func WithHTTPProxies(proxies *definations.Proxies) ClientOption {
 // WithTimeout options
 func WithTimeout(timeoutSeconds int) ClientOption {
 	return newFuncHTTPClientOption(func(o *httpClientOption) {
-		o.timeouts = time.Duration(timeoutSeconds)
+		o.timeouts = time.Duration(timeoutSeconds) * time.Second
 	})
 }
 
