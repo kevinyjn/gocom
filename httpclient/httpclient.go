@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/kevinyjn/gocom/definations"
 	"github.com/kevinyjn/gocom/logger"
@@ -23,6 +24,7 @@ type httpClientOption struct {
 	headers    map[string]string
 	tlsOptions *definations.TLSOptions
 	proxies    *definations.Proxies
+	timeouts   time.Duration
 }
 
 // ClientOption http client option
@@ -57,6 +59,7 @@ func defaultHTTPClientJSONOptions() httpClientOption {
 			"Content-Type": "application/json",
 		},
 		tlsOptions: nil,
+		timeouts:   time.Duration(30),
 	}
 }
 
@@ -105,6 +108,13 @@ func WithHTTPTLSOptions(tlsOptions *definations.TLSOptions) ClientOption {
 func WithHTTPProxies(proxies *definations.Proxies) ClientOption {
 	return newFuncHTTPClientOption(func(o *httpClientOption) {
 		o.proxies = proxies
+	})
+}
+
+// WithTimeout options
+func WithTimeout(timeoutSeconds int) ClientOption {
+	return newFuncHTTPClientOption(func(o *httpClientOption) {
+		o.timeouts = time.Duration(timeoutSeconds)
 	})
 }
 
@@ -274,10 +284,13 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 		TLSClientConfig: tlsConfig,
 	}
 	if opts.proxies != nil && opts.proxies.Valid() {
-		proxyUrl, _ := url.Parse(opts.proxies.FetchProxyURL(queryURL))
-		tr.Proxy = http.ProxyURL(proxyUrl)
+		proxyURL, _ := url.Parse(opts.proxies.FetchProxyURL(queryURL))
+		tr.Proxy = http.ProxyURL(proxyURL)
 	}
 	client := &http.Client{Transport: tr}
+	if opts.timeouts > 0 {
+		client.Timeout = opts.timeouts
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
