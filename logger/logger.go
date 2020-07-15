@@ -21,11 +21,11 @@ const (
 
 // Variables
 var (
-	Trace   *log.Logger
-	Info    *log.Logger
-	Warning *log.Logger
-	Error   *log.Logger
-	Fatal   *log.Logger
+	Trace   *log.Logger = log.New(os.Stdout, "[TRACE] ", log.Ldate|log.Ltime|log.Lshortfile)
+	Info    *log.Logger = log.New(os.Stdout, "[INFO] ", log.Ldate|log.Ltime|log.Lshortfile)
+	Warning *log.Logger = log.New(os.Stdout, "[WARN] ", log.Ldate|log.Ltime|log.Lshortfile)
+	Error   *log.Logger = log.New(io.MultiWriter(os.Stdout, os.Stderr), "[ERROR] ", log.Ldate|log.Ltime|log.Lshortfile)
+	Fatal   *log.Logger = log.New(io.MultiWriter(os.Stdout, os.Stderr), "[FATAL] ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
 // Init initializer

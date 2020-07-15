@@ -97,7 +97,7 @@ func Init(filePath string) (*Env, error) {
 		return &env, nil
 	}
 	chkPaths := [][]*string{
-		[]*string{&env.RestfulLoader.TLS.CaFile, &env.RestfulLoader.TLS.CertFile, &env.RestfulLoader.TLS.KeyFile},
+		{&env.RestfulLoader.TLS.CaFile, &env.RestfulLoader.TLS.CertFile, &env.RestfulLoader.TLS.KeyFile},
 	}
 	for _, svr := range []Server{env.Server} {
 		chkPaths = append(chkPaths, []*string{&svr.TLS.CertFile, &svr.TLS.CaFile, &svr.TLS.KeyFile})

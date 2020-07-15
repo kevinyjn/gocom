@@ -12,7 +12,9 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/utils"
 	"github.com/kevinyjn/gocom/yamlutils"
 )
@@ -31,6 +33,9 @@ type ProjectScaffolds struct {
 	DockerfileTemplate  string   `yaml:"dockerfileTempl" json:"dockerfileTempl"`
 	JenkinsfileTemplate string   `yaml:"jenkinsfileTempl" json:"jenkinsfileTempl"`
 	EtcFileTemplates    []string `yaml:"etcFileTemplates" json:"etcFileTemplates"`
+	AppVersion          string   `yaml:"appVersion" json:"appVersion"`
+	ConfigFile          string   `yaml:"configFile" json:"configFile"`
+	MQConfigFile        string   `yaml:"mqConfigFile" json:"mqConfigFile"`
 	creatingDirs        map[string]string
 	goVersion           string
 }
@@ -53,9 +58,12 @@ func NewProjectScaffolds(projectName string, projectDir string) *ProjectScaffold
 		ServicesFolder:      "services",
 		Datasources:         []string{"default"},
 		creatingDirs:        map[string]string{},
-		goVersion:           "1.14",
+		goVersion:           getGolangVersion(),
 		DockerfileTemplate:  "",
 		JenkinsfileTemplate: "",
+		AppVersion:          "0.0.1",
+		ConfigFile:          "../etc/config.yaml",
+		MQConfigFile:        "../etc/mq.yaml",
 		// RepositoriesFolder: "repositories",
 	}
 	return s
@@ -91,9 +99,11 @@ func (s *ProjectScaffolds) Generate() error {
 			break
 		case "modelsFolder":
 			err = s.createGitkeepFiles(d)
+			err = s.updateModelsIndexFile(d, "")
 			break
 		case "controllersFolder":
 			err = s.createGitkeepFiles(d)
+			err = s.createControllerIndexSourcefiles(d)
 			break
 		case "middlewaresFolder":
 			err = s.createGitkeepFiles(d)
@@ -117,6 +127,7 @@ func (s *ProjectScaffolds) Generate() error {
 	err = s.createGoModFiles(path.Join(s.BaseDir, "src"))
 	err = s.createGitignoreFiles(s.BaseDir, nil)
 	err = s.createDockerignoreFiles(s.BaseDir, nil)
+	err = s.createEntrypointSources(path.Join(s.BaseDir, "src"))
 
 	params := s.getTemplateParams()
 	if "" != s.DockerfileTemplate {
@@ -177,7 +188,45 @@ func (s *ProjectScaffolds) GetProjectSubFolderPath(tagName string) string {
 // GenerateModel by model defination
 func (s *ProjectScaffolds) GenerateModel(model *ModelScaffolds) error {
 	filePath := path.Join(s.creatingDirs["modelsFolder"], model.Path)
-	return writeFileContents(filePath, model.Encode())
+	err := writeFileContents(filePath, model.Encode(), false)
+	if nil != err {
+		return err
+	}
+	modelPath := path.Dir(filePath)
+	return s.updateModelsIndexFile(modelPath, model.GetStructName())
+}
+
+func (s *ProjectScaffolds) updateModelsIndexFile(folderPath string, modelName string) error {
+	filePath := path.Join(folderPath, "index.go")
+	endModelsComment := "} // ends of models array. NOTE: do not remove or change this comment!"
+	if utils.IsPathNotExists(filePath) {
+		lines := []string{
+			fmt.Sprintf("package %s", getGoSourcePackageName(filePath, "models")),
+			"",
+			"// AllModelStructures get all model structures",
+			"func AllModelStructures() []interface{} {",
+			"\tdefs := []interface{}{",
+			"\t" + endModelsComment,
+			"\treturn defs",
+			"}",
+			"",
+		}
+
+		err := writeFileContents(filePath, strings.Join(lines, "\n"), false)
+		if nil != err {
+			return err
+		}
+	}
+	if "" != modelName {
+		contents, err := ioutil.ReadFile(filePath)
+		if nil != err {
+			logger.Error.Printf("adding %s to %s failed with opening file:%v", modelName, filePath, err)
+			return err
+		}
+		newContents := strings.Replace(string(contents), endModelsComment, fmt.Sprintf("\t&%s{},\n\t%s", modelName, endModelsComment), 1)
+		return writeFileContents(filePath, newContents, true)
+	}
+	return nil
 }
 
 func (s *ProjectScaffolds) getTemplateParams() map[string]interface{} {
@@ -202,7 +251,7 @@ func (s *ProjectScaffolds) ensureRequiredDirectories() error {
 }
 
 func (s *ProjectScaffolds) createEtcFiles(folderPath string) error {
-	err := writeFileContents(path.Join(folderPath, "version"), "0.0.1")
+	err := writeFileContents(path.Join(folderPath, "version"), s.AppVersion, false)
 	if nil != err {
 		return err
 	}
@@ -210,8 +259,7 @@ func (s *ProjectScaffolds) createEtcFiles(folderPath string) error {
 		params := s.getTemplateParams()
 		for _, fname := range s.EtcFileTemplates {
 			filePath := path.Join(folderPath, fname)
-			_, err = os.Stat(filePath)
-			if os.IsExist(err) {
+			if utils.IsPathExists(filePath) {
 				if strings.HasSuffix(fname, ".tpl") {
 					fname = fname[:len(fname)-4]
 				}
@@ -224,7 +272,7 @@ func (s *ProjectScaffolds) createEtcFiles(folderPath string) error {
 
 func (s *ProjectScaffolds) createGitkeepFiles(folderPath string) error {
 	filePath := path.Join(folderPath, ".gitkeep")
-	return writeFileContents(filePath, "")
+	return writeFileContents(filePath, "", false)
 }
 
 func (s *ProjectScaffolds) createGitignoreFiles(folderPath string, lines []string) error {
@@ -246,7 +294,7 @@ func (s *ProjectScaffolds) createGitignoreFiles(folderPath string, lines []strin
 			"*.tar",
 		}
 	}
-	return writeFileContents(filePath, strings.Join(lines, "\n"))
+	return writeFileContents(filePath, strings.Join(lines, "\n"), false)
 }
 
 func (s *ProjectScaffolds) createDockerignoreFiles(folderPath string, lines []string) error {
@@ -266,26 +314,121 @@ func (s *ProjectScaffolds) createDockerignoreFiles(folderPath string, lines []st
 			"uploads",
 		}
 	}
-	return writeFileContents(filePath, strings.Join(lines, "\n"))
+	return writeFileContents(filePath, strings.Join(lines, "\n"), false)
 }
 
 func (s *ProjectScaffolds) createGoModFiles(folderPath string) error {
 	filePath := path.Join(folderPath, "go.mod")
-	ver := "1.14"
-	r := regexp.MustCompile(`(\d+\.\d+)`)
-	found := r.FindAllStringSubmatch(runtime.Version(), 1)
-	if len(found) > 0 {
-		ver = found[0][0]
-	}
+	ver := getGolangVersion()
 	s.goVersion = ver
 	lines := []string{
-		fmt.Sprintf("module \"%s.project\"\n", s.Name),
+		fmt.Sprintf("module \"%s\"\n", s.getGoModName()),
 		fmt.Sprintf("go %s\n", ver),
 		"require (",
 		"\tgithub.com/kevinyjn/gocom master",
 		")\n",
 	}
-	return writeFileContents(filePath, strings.Join(lines, "\n"))
+	return writeFileContents(filePath, strings.Join(lines, "\n"), false)
+}
+
+func (s *ProjectScaffolds) getGoModName() string {
+	return fmt.Sprintf("project.local/%s", utils.KebabCaseString(s.Name))
+}
+
+func (s *ProjectScaffolds) createEntrypointSources(folderPath string) error {
+	filePath := path.Join(folderPath, "init.go")
+	err := writeFileContents(filePath, s.getGoInitSource(), false)
+	if nil != err {
+		return err
+	}
+	filePath = path.Join(folderPath, "main.go")
+	return writeFileContents(filePath, s.getGoMainSource(), false)
+}
+
+func (s *ProjectScaffolds) getGoInitSource() string {
+	lines := []string{
+		"package main\n",
+		"import (",
+		"\t\"flag\"",
+		"\t\"fmt\"",
+		")\n",
+		"// Variables of program information",
+		"var (",
+		fmt.Sprintf("\tBuildVersion = \"%s\"", s.AppVersion),
+		fmt.Sprintf("\tBuildName    = \"%s\"", s.Name),
+		fmt.Sprintf("\tBuiltTime    = \"%s\"", utils.TimeToHuman("YYYY-MM-DD HH:mm:ss", time.Now())),
+		"\tCommitID     = \"\"",
+		fmt.Sprintf("\tConfigFile   = \"%s\"", s.ConfigFile),
+		fmt.Sprintf("\tMQConfigFile = \"%s\"", s.MQConfigFile),
+		")\n",
+		"func init() {",
+		"\tvar showVer bool\n\tvar confFile string\n",
+		"\tflag.BoolVar(&showVer, \"v\", false, \"Build version\")",
+		fmt.Sprintf("\tflag.StringVar(&confFile, \"config\", \"%s\", \"Configure file\")", s.ConfigFile),
+		"\tflag.Parse()\n",
+		"\tif confFile != \"\" {\n\t\tConfigFile = confFile\n\t}",
+		"\tif showVer {",
+		"\t\tfmt.Printf(\"Build name:\\t%%s\\n\", BuildName)",
+		"\t\tfmt.Printf(\"Build version:\\t%%s\\n\", BuildVersion)",
+		"\t\tfmt.Printf(\"Built time:\\t%%s\\n\", BuiltTime)",
+		"\t\tfmt.Printf(\"Commit ID:\\t%%s\\n\", CommitID)",
+		"\t}",
+		"}\n",
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (s *ProjectScaffolds) getGoMainSource() string {
+	lines := []string{
+		"package main",
+		"",
+		"import (",
+		"\t\"fmt\"\n",
+		fmt.Sprintf("\t\"%s/controllers\"", s.getGoModName()),
+		"",
+		"\t\"github.com/kevinyjn/gocom/application\"",
+		"\t\"github.com/kevinyjn/gocom/caching\"",
+		"\t\"github.com/kevinyjn/gocom/config\"",
+		"\t\"github.com/kevinyjn/gocom/logger\"",
+		"\t\"github.com/kevinyjn/gocom/mq\"",
+		"\t\"github.com/kevinyjn/gocom/orm/rdbms/dal\"",
+		"\t\"github.com/kevinyjn/gocom/utils\"\n",
+		"\t\"github.com/kataras/iris\"",
+		")\n",
+		"func main() {",
+		"\tenv, err := config.Init(ConfigFile)",
+		"\tif nil != err {\n\t\treturn\n\t}\n",
+		"\tlogger.Init(&env.Logger)\n",
+		"\tif len(env.MQs) > 0 {",
+		"\t\terr = mq.Init(MQConfigFile, env.MQs)",
+		"\t\tif nil != err {",
+		"\t\t\tlogger.Error.Printf(\"Please check the mq configuration and restart. error:%%v\", err)",
+		"\t\t}\n\t}",
+		"\tif len(env.Caches) > 0 {",
+		"\t\tif !caching.InitCacheProxy(env.Caches) {",
+		"\t\t\tlogger.Warning.Println(\"Please check the caching configuration and restart.\")",
+		"\t\t}\n\t}",
+		"\tif len(env.DBs) > 0 {",
+		"\t\tfor category, dbConfig := range env.DBs {",
+		"\t\t\t_, err = dal.GetInstance().Init(category, &dbConfig)",
+		"\t\t\tif nil != err {",
+		"\t\t\t\tlogger.Error.Printf(\"Please check the database:%%s configuration and restart. error:%%v\", category, err)",
+		"\t\t\t}\n\t\t}\n\t}",
+		"\n\tlistenAddr := fmt.Sprintf(\"%%s:%%d\", env.Server.Host, env.Server.Port)",
+		"\tlogger.Info.Printf(\"Starting server on %%s...\", listenAddr)\n",
+		"\tapp := application.GetApplication(config.ServerMain)",
+		"\taccessLogger, accessLoggerClose := logger.NewAccessLogger()",
+		"\tdefer accessLoggerClose()",
+		"\tapp.Use(accessLogger)",
+		"\tcontrollers.InitAll(app)",
+		"\tapp.RegisterView(iris.HTML(config.TemplateViewPath, config.TemplateViewEndfix))",
+		"\tif utils.IsPathExists(config.Favicon) {\n\t\tapp.Favicon(config.Favicon)\n\t}",
+		"\tapp.StaticWeb(config.StaticRoute, config.StaticAssets)",
+		"\tapp.Run(iris.Addr(listenAddr), iris.WithoutServerError(iris.ErrServerClosed))",
+		"}",
+		"",
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (s *ProjectScaffolds) createFileByTemplate(folderPath string, fileName string, templPath string, params map[string]interface{}) error {
@@ -307,12 +450,52 @@ func (s *ProjectScaffolds) createFileByTemplate(folderPath string, fileName stri
 	return nil
 }
 
-func writeFileContents(filePath, contents string) error {
+func (s *ProjectScaffolds) createControllerIndexSourcefiles(folderPath string) error {
+	filePath := path.Join(folderPath, "index.go")
+	lines := []string{
+		fmt.Sprintf("package %s\n", getGoSourcePackageName(filePath, "controllers")),
+		"import (",
+		"\t\"github.com/kataras/iris\"",
+		")\n",
+		"// InitAll initialize all handlers",
+		"func InitAll(app *iris.Application) {",
+		"}\n",
+	}
+	return writeFileContents(filePath, strings.Join(lines, "\n"), false)
+}
+
+func getGolangVersion() string {
+	ver := "1.14"
+	r := regexp.MustCompile(`(\d+\.\d+)`)
+	found := r.FindAllStringSubmatch(runtime.Version(), 1)
+	if len(found) > 0 {
+		ver = found[0][0]
+	}
+	return ver
+}
+
+func writeFileContents(filePath, contents string, forceOverride bool) error {
+	if false == forceOverride && utils.IsPathExists(filePath) {
+		return nil
+	}
 	fl, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
 	if nil != err {
 		return err
 	}
-	defer fl.Close()
 	_, err = fl.WriteString(contents)
+	fl.Close()
 	return err
+}
+
+func getGoSourcePackageName(filePath string, defaultName string) string {
+	pkgName := path.Dir(filePath)
+	if "" == pkgName || "." == pkgName || "./" == pkgName {
+		pkgName = defaultName
+	} else {
+		spIdx := strings.LastIndexAny(pkgName, "./\\ ")
+		if spIdx >= 0 {
+			pkgName = pkgName[spIdx+1:]
+		}
+	}
+	return pkgName
 }

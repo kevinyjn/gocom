@@ -2,9 +2,11 @@ package scaffolds
 
 import (
 	"fmt"
-	"path"
+	"regexp"
+	"sort"
 	"strings"
 
+	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/utils"
 )
 
@@ -21,6 +23,7 @@ type ModelScaffolds struct {
 type ModelField struct {
 	Name         string `json:"name"`
 	Column       string `json:"column" validate:"required"`
+	ColumnType   string `json:"columnType" validate:"required"`
 	Type         string `json:"type" validate:"required"`
 	Length       int    `json:"length" validate:"optional"`
 	IsPrimaryKey bool   `json:"isPrimaryKey" validate:"optional"`
@@ -28,40 +31,71 @@ type ModelField struct {
 	IsRequired   bool   `json:"isRequired"`
 }
 
+// FieldTypeMappings map[golangType]dbType
+var FieldTypeMappings = map[string]string{
+	"int":        "Int",
+	"int8":       "Int",
+	"int16":      "Int",
+	"int32":      "Int",
+	"uint":       "Int",
+	"uint8":      "Int",
+	"uint16":     "Int",
+	"uint32":     "Int",
+	"int64":      "BigInt",
+	"uint64":     "BigInt",
+	"float32":    "Float",
+	"float64":    "Double",
+	"complex64":  "Varchar(64)",
+	"complex128": "Varchar(64)",
+	"[]uint8":    "Blob",
+	"[]byte":     "Blob",
+	"array":      "Text",
+	"slice":      "Text",
+	"map":        "Text",
+	"bool":       "Bool",
+	"string":     "Varchar(255)",
+	"time.Time":  "DateTime",
+}
+
 // Encode model context
 func (m *ModelScaffolds) Encode() string {
-	pkgName := path.Base(m.Path)
-	if strings.HasSuffix(pkgName, ".go") {
-		pkgName = pkgName[0 : len(pkgName)-3]
-	}
-	if strings.Contains(pkgName, ".") {
-		pkgNames := strings.Split(pkgName, ".")
-		pkgName = pkgNames[len(pkgNames)-1]
-	}
-	structureName := utils.CamelString(m.Name)
-	if "" == structureName {
-		structureName = utils.CamelString(m.TableName)
-	}
+	pkgName := getGoSourcePackageName(m.Path, "models")
+	structureName := m.GetStructName()
 	tableName := m.TableName
 	if "" == tableName {
-		tableName = utils.SnakeString(structureName)
+		tableName = utils.SnakeCaseString(structureName)
 	}
 	fields := make([]string, len(m.Fields))
 	fieldSpaces := 27
+	typeSpaces := 3
+	exImports := []string{}
 	if nil != m.Fields {
 		for _, field := range m.Fields {
 			if len(field.Name) > fieldSpaces {
 				fieldSpaces = len(field.Name)
 			}
+			fieldType := field.getFieldType()
+			switch fieldType {
+			case "time.Time":
+				exImports = append(exImports, fmt.Sprintf("\t\"%s\"\n", "time"))
+				break
+			}
+			if len(fieldType) > typeSpaces {
+				typeSpaces = len(fieldType)
+			}
 		}
 		for i, field := range m.Fields {
-			fields[i] = field.Encode(fieldSpaces)
+			fields[i] = field.Encode(fieldSpaces, typeSpaces)
 		}
+	}
+	if len(exImports) > 0 {
+		sort.Sort(sort.StringSlice(exImports))
+		exImports = append(exImports, "\n")
 	}
 	lines := []string{
 		fmt.Sprintf("package %s\n", pkgName),
 		"import (",
-		"\t\"github.com/kevinyjn/gocom/orm/rdbms/behaviors\"",
+		fmt.Sprintf("%s\t\"github.com/kevinyjn/gocom/orm/rdbms/behaviors\"", strings.Join(exImports, "")),
 		"\t\"github.com/kevinyjn/gocom/orm/rdbms/dal\"",
 		")\n",
 		fmt.Sprintf("// %s model", structureName),
@@ -81,35 +115,69 @@ func (m *ModelScaffolds) Encode() string {
 	return strings.Join(lines, "\n")
 }
 
+// GetStructName converts name to camel string
+func (m *ModelScaffolds) GetStructName() string {
+	structureName := utils.PascalCaseString(m.Name)
+	if "" == structureName {
+		structureName = utils.PascalCaseString(m.TableName)
+	}
+	return structureName
+}
+
 // Encode as xorm field defination
-func (f *ModelField) Encode(spaces int) string {
-	fieldName := utils.CamelString(f.Name)
+func (f *ModelField) Encode(fieldPaces int, typeSpaces int) string {
+	fieldName := utils.PascalCaseString(f.Name)
 	if "" == fieldName {
-		fieldName = utils.CamelString(f.Column)
+		fieldName = utils.PascalCaseString(f.Column)
 	}
 	if "" == fieldName {
 		return ""
 	}
-	jsonName := strings.ToLower(fieldName[:1]) + fieldName[1:]
+	jsonName := utils.CamelCaseString(fieldName)
 	columnName := f.Column
 	if "" == columnName {
-		columnName = utils.SnakeString(fieldName)
+		columnName = utils.SnakeCaseString(fieldName)
 	}
+	fieldType := f.getFieldType()
+	columnType := f.getColumnType()
 
-	return fmt.Sprintf("\t%s %s`xorm:\"'%s' %s\" json:\"%s\"`",
-		fieldName, strings.Repeat(" ", spaces-len(fieldName)), columnName, f.serializeFieldSpecs(), jsonName)
+	return fmt.Sprintf("\t%s %s %s %s`xorm:\"'%s' %s%s\" json:\"%s\"`",
+		fieldName, strings.Repeat(" ", fieldPaces-len(fieldName)),
+		fieldType, strings.Repeat(" ", typeSpaces-len(fieldType)),
+		columnName, columnType,
+		f.serializeFieldSpecs(), jsonName)
+}
+
+func (f *ModelField) getFieldType() string {
+	fieldType := f.Type
+	if strings.ContainsAny(fieldType, "./[]") == false {
+		fieldType = strings.ToLower(f.Type)
+	}
+	if FieldTypeMappings[fieldType] == "" {
+		logger.Error.Printf("ModelField:%v get field type while the fieldType:%s not recognized, treat as string", f, f.Type)
+		fieldType = "string"
+	}
+	return fieldType
+}
+
+func (f *ModelField) getColumnType() string {
+	columnType := FieldTypeMappings[f.getFieldType()]
+	if "" == columnType {
+		logger.Error.Printf("ModelField:%v get field type while the fieldType:%s not recognized, treat as string", f, f.Type)
+		columnType = FieldTypeMappings["string"]
+	}
+	if f.Length > 0 {
+		r := regexp.MustCompile(`\((\d+)\)`)
+		rs := r.FindAllStringSubmatch(columnType, 1)
+		if len(rs) > 0 {
+			columnType = r.ReplaceAllString(columnType, fmt.Sprintf("(%d)", f.Length))
+		}
+	}
+	return columnType
 }
 
 func (f *ModelField) serializeFieldSpecs() string {
-	fieldType := f.Type
-	if f.Length > 0 {
-		if strings.Compare(strings.ToUpper(f.Type), "VARCHAR") == 0 {
-			fieldType += fmt.Sprintf("(%d)", f.Length)
-		}
-	}
-	fieldSpecs := []string{
-		fieldType,
-	}
+	fieldSpecs := []string{}
 	if f.IsRequired {
 		fieldSpecs = append(fieldSpecs, "notnull")
 	}
@@ -119,5 +187,8 @@ func (f *ModelField) serializeFieldSpecs() string {
 		fieldSpecs = append(fieldSpecs, "index")
 	}
 
-	return strings.Join(fieldSpecs, " ")
+	if len(fieldSpecs) > 0 {
+		return " " + strings.Join(fieldSpecs, " ")
+	}
+	return ""
 }

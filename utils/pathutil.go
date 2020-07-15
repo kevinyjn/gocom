@@ -13,3 +13,21 @@ func EnsureDirectory(path string) error {
 	}
 	return err
 }
+
+// IsPathExists check if the path exists
+func IsPathExists(path string) bool {
+	_, err := os.Stat(path)
+	if nil == err {
+		return true
+	}
+	return os.IsExist(err)
+}
+
+// IsPathNotExists check if the path not exists
+func IsPathNotExists(path string) bool {
+	_, err := os.Stat(path)
+	if nil == err {
+		return false
+	}
+	return os.IsNotExist(err)
+}

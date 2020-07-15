@@ -552,8 +552,8 @@ func IsInList(key int, list []int) bool {
 	return false
 }
 
-// CamelString converts xx_yy to XxYy
-func CamelString(s string) string {
+// PascalCaseString converts xx_yy to XxYy
+func PascalCaseString(s string) string {
 	data := make([]byte, 0, len(s))
 	j := false
 	k := false
@@ -577,8 +577,18 @@ func CamelString(s string) string {
 	return string(data[:])
 }
 
-// SnakeString converts XxYy to xx_yy, XxYY to xx_yy
-func SnakeString(s string) string {
+// CamelCaseString converts xx_yy to xxYY
+func CamelCaseString(s string) string {
+	if strings.HasPrefix(s, "ID") {
+		s = "id" + s[2:]
+	}
+	s = PascalCaseString(s)
+	s = strings.ToLower(s[0:1]) + s[1:]
+	return s
+}
+
+// SnakeCaseString converts XxYy to xx_yy, XxYY to xx_yy
+func SnakeCaseString(s string) string {
 	data := make([]byte, 0, len(s)*2)
 	j := false
 	num := len(s)
@@ -588,6 +598,26 @@ func SnakeString(s string) string {
 			data = append(data, '_')
 		}
 		if d != '_' {
+			j = true
+		}
+		data = append(data, d)
+	}
+	return strings.ToLower(string(data[:]))
+}
+
+// KebabCaseString converts XxYy to xx-yy, XxYY to xx-yy
+func KebabCaseString(s string) string {
+	data := make([]byte, 0, len(s)*2)
+	j := false
+	num := len(s)
+	for i := 0; i < num; i++ {
+		d := s[i]
+		if i > 0 && d >= 'A' && d <= 'Z' && j {
+			data = append(data, '-')
+		}
+		if d == '_' {
+			d = '-'
+		} else if d != '-' {
 			j = true
 		}
 		data = append(data, d)
