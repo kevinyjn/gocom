@@ -22,11 +22,12 @@ func main() {
 		TableName: "example_model",
 		Fields: []scaffolds.ModelField{
 			{
-				Name:         "ID",
-				Column:       "id",
-				Type:         "int",
-				Length:       32,
-				IsPrimaryKey: true,
+				Name:           "ID",
+				Column:         "id",
+				Type:           "int",
+				Length:         32,
+				IsPrimaryKey:   true,
+				AutoIncreament: true,
 			},
 			{
 				Name:    "name",

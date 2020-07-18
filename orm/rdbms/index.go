@@ -1,4 +1,4 @@
-package dal
+package rdbms
 
 import (
 	"errors"
@@ -375,10 +375,7 @@ func (dan *DataAccessEngine) getDbEngineWithStructureName(beanOrTableName interf
 }
 
 func (dan *DataAccessEngine) getDatasourceName(beanOrTableName interface{}, defaultDatasourceName string) (string, string) {
-	val := reflect.ValueOf(beanOrTableName)
-	if val.Type().Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := getBeanValue(beanOrTableName)
 	if val.Type().Kind() == reflect.Struct {
 		structureName := fmt.Sprintf("%s.%s", val.Type().PkgPath(), val.Type().Name())
 		dataSourceName := dan.datasourceNamesByTableBeanName[structureName]

@@ -1,4 +1,4 @@
-package dal
+package rdbms
 
 import (
 	"fmt"
@@ -415,4 +415,12 @@ func getBeanType(bean interface{}) reflect.Type {
 		val = val.Elem()
 	}
 	return val.Type()
+}
+
+func getBeanValue(bean interface{}) reflect.Value {
+	val := reflect.ValueOf(bean)
+	if val.Type().Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	return val
 }

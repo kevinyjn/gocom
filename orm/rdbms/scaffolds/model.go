@@ -21,14 +21,15 @@ type ModelScaffolds struct {
 
 // ModelField field structure
 type ModelField struct {
-	Name         string `json:"name"`
-	Column       string `json:"column" validate:"required"`
-	ColumnType   string `json:"columnType" validate:"required"`
-	Type         string `json:"type" validate:"required"`
-	Length       int    `json:"length" validate:"optional"`
-	IsPrimaryKey bool   `json:"isPrimaryKey" validate:"optional"`
-	IsIndex      bool   `json:"isIndex"`
-	IsRequired   bool   `json:"isRequired"`
+	Name           string `json:"name"`
+	Column         string `json:"column" validate:"required"`
+	ColumnType     string `json:"columnType" validate:"required"`
+	Type           string `json:"type" validate:"required"`
+	Length         int    `json:"length" validate:"optional"`
+	IsPrimaryKey   bool   `json:"isPrimaryKey" validate:"optional"`
+	IsIndex        bool   `json:"isIndex"`
+	AutoIncreament bool   `json:"autoIncreament"`
+	IsRequired     bool   `json:"isRequired"`
 }
 
 // FieldTypeMappings map[golangType]dbType
@@ -95,21 +96,21 @@ func (m *ModelScaffolds) Encode() string {
 	lines := []string{
 		fmt.Sprintf("package %s\n", pkgName),
 		"import (",
-		fmt.Sprintf("%s\t\"github.com/kevinyjn/gocom/orm/rdbms/behaviors\"", strings.Join(exImports, "")),
-		"\t\"github.com/kevinyjn/gocom/orm/rdbms/dal\"",
+		fmt.Sprintf("%s\t\"github.com/kevinyjn/gocom/orm/rdbms\"", strings.Join(exImports, "")),
+		"\t\"github.com/kevinyjn/gocom/orm/rdbms/behaviors\"",
 		")\n",
 		fmt.Sprintf("// %s model", structureName),
 		fmt.Sprintf("type %s struct {", structureName),
 		strings.Join(fields, "\n"),
 		fmt.Sprintf("\tbehaviors.ModifyingBehavior %s`xorm:\"extends\"`", strings.Repeat(" ", fieldSpaces-27)),
-		fmt.Sprintf("\tdal.Datasource %s`xorm:\"-\" datasource:\"default\"`", strings.Repeat(" ", fieldSpaces-14)),
+		fmt.Sprintf("\trdbms.Datasource %s`xorm:\"-\" datasource:\"default\"`", strings.Repeat(" ", fieldSpaces-16)),
 		"}\n",
 		"// TableName returns table name in database",
 		fmt.Sprintf("func (m *%s) TableName() string {\n\treturn \"%s\"\n}\n", structureName, tableName),
 		"// Fetch retrieve one record by self condition",
-		fmt.Sprintf("func (m *%s) Fetch() error {\n\treturn m.Datasource.Fetch(m)\n}\n", structureName),
+		fmt.Sprintf("func (m *%s) Fetch() (bool, error) {\n\treturn m.Datasource.Fetch(m)\n}\n", structureName),
 		"// Save record to database",
-		fmt.Sprintf("func (m *%s) Save() error {\n\treturn m.Datasource.Save(m)\n}\n", structureName),
+		fmt.Sprintf("func (m *%s) Save() (bool, error) {\n\treturn m.Datasource.Save(m)\n}\n", structureName),
 	}
 
 	return strings.Join(lines, "\n")
@@ -185,6 +186,9 @@ func (f *ModelField) serializeFieldSpecs() string {
 		fieldSpecs = append(fieldSpecs, "pk")
 	} else if f.IsIndex {
 		fieldSpecs = append(fieldSpecs, "index")
+	}
+	if f.AutoIncreament {
+		fieldSpecs = append(fieldSpecs, "autoincr")
 	}
 
 	if len(fieldSpecs) > 0 {

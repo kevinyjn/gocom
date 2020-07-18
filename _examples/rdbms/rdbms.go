@@ -5,7 +5,7 @@ import (
 
 	"github.com/kevinyjn/gocom/config"
 	"github.com/kevinyjn/gocom/logger"
-	"github.com/kevinyjn/gocom/orm/rdbms/dal"
+	"github.com/kevinyjn/gocom/orm/rdbms"
 )
 
 func main() {
@@ -17,7 +17,7 @@ func main() {
 	logger.Init(&env.Logger)
 	dbConfig := env.DBs["default"]
 
-	_, err = dal.GetInstance().Init("default", &dbConfig)
+	_, err = rdbms.GetInstance().Init("default", &dbConfig)
 	if nil != err {
 		fmt.Sprintf("initialize database entine failed with error:%v", err)
 		return
@@ -30,7 +30,7 @@ func main() {
 
 	ele.Save(&ele)
 
-	dal.GetInstance().FetchRecords(&schemaDemo{}, 20, 0)
+	rdbms.GetInstance().FetchRecords(&schemaDemo{}, 20, 0)
 
 	elex := &schemaDemo{Name: "demo"}
 	elex.Fetch(elex)

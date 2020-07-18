@@ -1,4 +1,4 @@
-package dal
+package rdbms
 
 import (
 	"reflect"
@@ -10,8 +10,8 @@ import (
 // the database schema model should be like this:
 // ```
 // type SchemaDemo struct {
-//     Name string    `xorm:"'name' VARCHAR(50) default('')"`
-//     dal.Datasource `xorm:"'-' datasource:"demo"`
+//     Name string      `xorm:"'name' VARCHAR(50) default('')"`
+//     rdbms.Datasource `xorm:"'-' datasource:"demo"`
 // }
 // ```
 type Datasource struct {

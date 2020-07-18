@@ -255,6 +255,8 @@ func (s *ProjectScaffolds) createEtcFiles(folderPath string) error {
 	if nil != err {
 		return err
 	}
+	configFileName := path.Base(s.ConfigFile)
+	configFileGenerated := false
 	if nil != s.EtcFileTemplates {
 		params := s.getTemplateParams()
 		for _, fname := range s.EtcFileTemplates {
@@ -263,9 +265,99 @@ func (s *ProjectScaffolds) createEtcFiles(folderPath string) error {
 				if strings.HasSuffix(fname, ".tpl") {
 					fname = fname[:len(fname)-4]
 				}
+				if fname == configFileName {
+					configFileGenerated = true
+				}
 				err = s.createFileByTemplate(folderPath, fname, filePath, params)
 			}
 		}
+	}
+	if !configFileGenerated {
+		templLines := []string{
+			"# Logger configuration",
+			"logger:",
+			"  level: \"{{ .LoggerLevel | unescaped }}\"",
+			"  type: \"{{ .LoggerType | unescaped }}\"",
+			"  address: \"{{ .LoggerAddress | unescaped }}\"",
+			"  remoteType: \"{{ .LoggerRemoteType | unescaped }}\"",
+			"\n# Server configuration",
+			"server:",
+			"  scheme: http",
+			"  host: 0.0.0.0",
+			"  port: {{ .ServerPort | unescaped }}",
+			"  dev: {{ .ServerDev | unescaped }}",
+			"  depoyAddr: \"{{ .ServerDeployAddr | unescaped }}\"",
+			"\n# MQ configuration",
+			"mq:",
+			"  default:",
+			"    driver: {{ .MQDriver | unescaped }}",
+			"    host: \"{{ .MQHost | unescaped }}\"",
+			"    port: {{ .MQPort | unescaped }}",
+			"    virtualHost: \"{{ .MQVHost | unescaped }}\"",
+			"    username: \"{{ .MQUser | unescaped }}\"",
+			"    password: \"{{ .MQPassword | unescaped }}\"",
+			"    timeout: 60",
+			"    heartbeat: 30",
+			"\n# Cache configuration",
+			"cache:",
+			"  default:",
+			"    driver: {{ .CacheDriver | unescaped }}",
+			"    host: \"{{ .CacheHost | unescaped }}\"",
+			"    port: {{ .CachePort | unescaped }}",
+			"    password: \"{{ .CachePassword | unescaped }}\"",
+			"    db: {{ .CacheDb | unescaped }}",
+			"    clusterMode: {{ .CacheClusterMode | unescaped }}",
+			"",
+		}
+		templContent := strings.Join(templLines, "\n")
+
+		templParams := map[string]interface{}{
+			"LoggerLevel":      `${LOGGER_LEVEL-"INFO"}`,
+			"LoggerType":       `${LOGGER_TYPE-"filelog"}`,
+			"LoggerAddress":    `${LOGGER_ADDR-"../log/app.log"}`,
+			"LoggerRemoteType": `${LOGGER_REMOTE_TYPE-"udp"}`,
+			"ServerPort":       `${SERVER_PORT-"8080"}`,
+			"ServerDev":        `${SERVER_DEV-"false"}`,
+			"ServerDeployAddr": `${DEPLOY_ADDR-""}`,
+			"MQDriver":         `${MQ_DRIVER-"rabbitmq"}`,
+			"MQHost":           `${MQ_HOST-"127.0.0.1"}`,
+			"MQPort":           `${MQ_PORT-"5672"}`,
+			"MQVHost":          `${MQ_VHOST-"/"}`,
+			"MQUser":           `${MQ_USER-"guest"}`,
+			"MQPassword":       `${MQ_PASSWORD-"guest"}`,
+			"CacheDriver":      `${CACHE_DRIVER-"redis"}`,
+			"CacheHost":        `${CACHE_HOST-"127.0.0.1"}`,
+			"CachePort":        `${CACHE_PORT-"6379"}`,
+			"CachePassword":    `${CACHE_PASSWORD}`,
+			"CacheDb":          `${CACHE_DB-"15"}`,
+			"CacheClusterMode": `${CACHE_CLUSTER-"false"}`,
+		}
+
+		fileExt := path.Ext(configFileName)
+		err = s.createFileByTemplateContent(folderPath, strings.Replace(configFileName, fileExt, "-template"+fileExt, 1), templContent, templParams)
+
+		configParams := map[string]interface{}{
+			"LoggerLevel":      "INFO",
+			"LoggerType":       "filelog",
+			"LoggerAddress":    "../log/app.log",
+			"LoggerRemoteType": "udp",
+			"ServerPort":       "8080",
+			"ServerDev":        "false",
+			"ServerDeployAddr": "",
+			"MQDriver":         "rabbitmq",
+			"MQHost":           "127.0.0.1",
+			"MQPort":           "5672",
+			"MQVHost":          "/",
+			"MQUser":           "guest",
+			"MQPassword":       "guest",
+			"CacheDriver":      "redis",
+			"CacheHost":        "127.0.0.1",
+			"CachePort":        "6379",
+			"CachePassword":    "",
+			"CacheDb":          "15",
+			"CacheClusterMode": "false",
+		}
+		err = s.createFileByTemplateContent(folderPath, configFileName, templContent, configParams)
 	}
 	return nil
 }
@@ -368,10 +460,10 @@ func (s *ProjectScaffolds) getGoInitSource() string {
 		"\tflag.Parse()\n",
 		"\tif confFile != \"\" {\n\t\tConfigFile = confFile\n\t}",
 		"\tif showVer {",
-		"\t\tfmt.Printf(\"Build name:\\t%%s\\n\", BuildName)",
-		"\t\tfmt.Printf(\"Build version:\\t%%s\\n\", BuildVersion)",
-		"\t\tfmt.Printf(\"Built time:\\t%%s\\n\", BuiltTime)",
-		"\t\tfmt.Printf(\"Commit ID:\\t%%s\\n\", CommitID)",
+		"\t\tfmt.Printf(\"Build name:\\t%s\\n\", BuildName)",
+		"\t\tfmt.Printf(\"Build version:\\t%s\\n\", BuildVersion)",
+		"\t\tfmt.Printf(\"Built time:\\t%s\\n\", BuiltTime)",
+		"\t\tfmt.Printf(\"Commit ID:\\t%s\\n\", CommitID)",
 		"\t}",
 		"}\n",
 	}
@@ -391,7 +483,7 @@ func (s *ProjectScaffolds) getGoMainSource() string {
 		"\t\"github.com/kevinyjn/gocom/config\"",
 		"\t\"github.com/kevinyjn/gocom/logger\"",
 		"\t\"github.com/kevinyjn/gocom/mq\"",
-		"\t\"github.com/kevinyjn/gocom/orm/rdbms/dal\"",
+		"\t\"github.com/kevinyjn/gocom/orm/rdbms\"",
 		"\t\"github.com/kevinyjn/gocom/utils\"\n",
 		"\t\"github.com/kataras/iris\"",
 		")\n",
@@ -402,7 +494,7 @@ func (s *ProjectScaffolds) getGoMainSource() string {
 		"\tif len(env.MQs) > 0 {",
 		"\t\terr = mq.Init(MQConfigFile, env.MQs)",
 		"\t\tif nil != err {",
-		"\t\t\tlogger.Error.Printf(\"Please check the mq configuration and restart. error:%%v\", err)",
+		"\t\t\tlogger.Error.Printf(\"Please check the mq configuration and restart. error:%v\", err)",
 		"\t\t}\n\t}",
 		"\tif len(env.Caches) > 0 {",
 		"\t\tif !caching.InitCacheProxy(env.Caches) {",
@@ -410,12 +502,12 @@ func (s *ProjectScaffolds) getGoMainSource() string {
 		"\t\t}\n\t}",
 		"\tif len(env.DBs) > 0 {",
 		"\t\tfor category, dbConfig := range env.DBs {",
-		"\t\t\t_, err = dal.GetInstance().Init(category, &dbConfig)",
+		"\t\t\t_, err = rdbms.GetInstance().Init(category, &dbConfig)",
 		"\t\t\tif nil != err {",
-		"\t\t\t\tlogger.Error.Printf(\"Please check the database:%%s configuration and restart. error:%%v\", category, err)",
+		"\t\t\t\tlogger.Error.Printf(\"Please check the database:%s configuration and restart. error:%v\", category, err)",
 		"\t\t\t}\n\t\t}\n\t}",
-		"\n\tlistenAddr := fmt.Sprintf(\"%%s:%%d\", env.Server.Host, env.Server.Port)",
-		"\tlogger.Info.Printf(\"Starting server on %%s...\", listenAddr)\n",
+		"\n\tlistenAddr := fmt.Sprintf(\"%s:%d\", env.Server.Host, env.Server.Port)",
+		"\tlogger.Info.Printf(\"Starting server on %s...\", listenAddr)\n",
 		"\tapp := application.GetApplication(config.ServerMain)",
 		"\taccessLogger, accessLoggerClose := logger.NewAccessLogger()",
 		"\tdefer accessLoggerClose()",
@@ -434,6 +526,27 @@ func (s *ProjectScaffolds) getGoMainSource() string {
 func (s *ProjectScaffolds) createFileByTemplate(folderPath string, fileName string, templPath string, params map[string]interface{}) error {
 	filePath := path.Join(folderPath, fileName)
 	tpl, err := template.ParseFiles(templPath)
+	if nil != err {
+		return err
+	}
+	fl, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
+	if nil != err {
+		return err
+	}
+	var wt = bytes.Buffer{}
+	err = tpl.Execute(&wt, params)
+	if nil != err {
+		return err
+	}
+	fl.Write(wt.Bytes())
+	return nil
+}
+
+func (s *ProjectScaffolds) createFileByTemplateContent(folderPath string, fileName string, templContent string, params map[string]interface{}) error {
+	filePath := path.Join(folderPath, fileName)
+	tpl := template.New("index")
+	tpl = tpl.Funcs(template.FuncMap{"unescaped": func(x string) interface{} { return template.HTML(x) }})
+	tpl, err := tpl.Parse(templContent)
 	if nil != err {
 		return err
 	}

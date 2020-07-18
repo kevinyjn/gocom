@@ -1,14 +1,17 @@
 package main
 
 import (
+	"time"
+
+	"github.com/kevinyjn/gocom/orm/rdbms"
 	"github.com/kevinyjn/gocom/orm/rdbms/behaviors"
-	"github.com/kevinyjn/gocom/orm/rdbms/dal"
 )
 
 type schemaDemo struct {
-	ID                          int    `xorm:"'id' Int pk autoincr" json:"id"`
-	Category                    string `xorm:"'category' VARCHAR(36) notnull index" json:"category"`
-	Name                        string `xorm:"'name' VARCHAR(255) notnull index" json:"name"`
+	ID                          int       `xorm:"'id' Int pk autoincr" json:"id"`
+	Category                    string    `xorm:"'category' VARCHAR(36) notnull index" json:"category"`
+	Name                        string    `xorm:"'name' VARCHAR(255) notnull index" json:"name"`
+	UpdateTime                  time.Time `xorm:"'updateTime' DateTime index" json:"updateTime"`
 	behaviors.ModifyingBehavior `xorm:"extends"`
-	dal.Datasource              `xorm:"-" datasource:"default"`
+	rdbms.Datasource            `xorm:"-" datasource:"default"`
 }
