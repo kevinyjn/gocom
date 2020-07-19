@@ -10,5 +10,7 @@ import (
 // Init initialize all api handlers
 func Init(app *iris.Application) {
 	apiApp := app.Party(GraphQLRoute, beforeAPIAuthMiddlewareHandler)
-	rdbms.RegisterGraphQLModels(apiApp, models.AllModelStructures())
+	beans := models.AllModelStructures()
+	rdbms.RegisterGraphQLRoutes(apiApp, beans)
+	rdbms.RegisterGraphQLMQs(APIConsumerMQCategory, APIProduceMQCategory, beans)
 }

@@ -565,16 +565,81 @@ func (s *ProjectScaffolds) createFileByTemplateContent(folderPath string, fileNa
 
 func (s *ProjectScaffolds) createControllerIndexSourcefiles(folderPath string) error {
 	filePath := path.Join(folderPath, "index.go")
+	packageName := getGoSourcePackageName(filePath, "controllers")
 	lines := []string{
-		fmt.Sprintf("package %s\n", getGoSourcePackageName(filePath, "controllers")),
+		fmt.Sprintf("package %s\n", packageName),
 		"import (",
-		"\t\"github.com/kataras/iris\"",
+		"\t\"github.com/kataras/iris\"\n",
+		"\t",
+		fmt.Sprintf("\t\"%s/controllers/api\"", s.getGoModName()),
 		")\n",
 		"// InitAll initialize all handlers",
 		"func InitAll(app *iris.Application) {",
+		"\tapi.Init(app)",
 		"}\n",
 	}
-	return writeFileContents(filePath, strings.Join(lines, "\n"), false)
+	writeFileContents(filePath, strings.Join(lines, "\n"), false)
+
+	apiFolderPath := path.Join(folderPath, "api")
+	err := utils.EnsureDirectory(apiFolderPath)
+	if nil != err {
+		return err
+	}
+	return s.createControllerAPISourcefiles(apiFolderPath)
+}
+
+func (s *ProjectScaffolds) createControllerAPISourcefiles(folderPath string) error {
+	filePath := path.Join(folderPath, "init.go")
+	packageName := getGoSourcePackageName(filePath, "controllers")
+	lines := []string{
+		fmt.Sprintf("package %s\n", packageName),
+		"import (",
+		"\t\"github.com/kataras/iris\"",
+		"\t\"github.com/kevinyjn/gocom/orm/rdbms\"\n",
+		fmt.Sprintf("\t\"%s/models\"", s.getGoModName()),
+		")\n",
+		"// Init initialize api handlers",
+		"func Init(app *iris.Application) {",
+		"\tapiApp := app.Party(GraphQLRoute, beforeAPIAuthMiddlewareHandler)",
+		"\tbeans := models.AllModelStructures()",
+		"\trdbms.RegisterGraphQLRoutes(apiApp, beans)",
+		"\trdbms.RegisterGraphQLMQs(APIConsumerMQCategory, APIProduceMQCategory, beans)",
+		"}\n",
+	}
+	err := writeFileContents(filePath, strings.Join(lines, "\n"), false)
+
+	filePath = path.Join(folderPath, "accesscontrol.go")
+	lines = []string{
+		fmt.Sprintf("package %s\n", packageName),
+		"import (",
+		"\t\"github.com/kataras/iris\"",
+		")\n",
+		"// beforeAPIAuthMiddlewareHandler access control middleware",
+		"func beforeAPIAuthMiddlewareHandler(ctx iris.Context) {",
+		"\tctx.Next()",
+		"}\n",
+	}
+	err = writeFileContents(filePath, strings.Join(lines, "\n"), false)
+
+	filePath = path.Join(folderPath, "consts.go")
+	lines = []string{
+		fmt.Sprintf("package %s\n", packageName),
+		"// Constants",
+		"const (",
+		"\tGraphQLRoute          = \"/api/graphql\"",
+		"\tAPIConsumerMQCategory = \"api-consumer\"",
+		"\tAPIProduceMQCategory  = \"api-producer\"",
+		")\n",
+	}
+	err = writeFileContents(filePath, strings.Join(lines, "\n"), false)
+
+	filePath = path.Join(folderPath, "handlers.go")
+	lines = []string{
+		fmt.Sprintf("package %s\n", packageName),
+	}
+	err = writeFileContents(filePath, strings.Join(lines, "\n"), false)
+
+	return err
 }
 
 func getGolangVersion() string {

@@ -9,6 +9,8 @@ import (
 
 	"github.com/graphql-go/graphql"
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/mq"
+	"github.com/kevinyjn/gocom/mq/mqenv"
 	"github.com/kevinyjn/gocom/utils"
 
 	"github.com/kataras/iris"
@@ -22,6 +24,7 @@ type BeanGraphQLSchemaInfo struct {
 	schemaType    *graphql.Object
 	schema        *graphql.Schema
 	fieldsMapping map[string]graphFieldInfo
+	structureName string
 }
 
 type graphFieldInfo struct {
@@ -32,10 +35,12 @@ type graphFieldInfo struct {
 // GraphQLDelegate GraphQL operator wrapper
 type GraphQLDelegate struct {
 	prototypes map[string]*BeanGraphQLSchemaInfo
+	routeNames map[string]string
 }
 
 var _graphqlDelegate = &GraphQLDelegate{
 	prototypes: map[string]*BeanGraphQLSchemaInfo{},
+	routeNames: map[string]string{},
 }
 
 // GraphQL delegate
@@ -72,9 +77,12 @@ func (g *GraphQLDelegate) GetGraphQLSchemaInfo(bean interface{}) *BeanGraphQLSch
 				},
 			),
 			fieldsMapping: fieldsMapping,
+			structureName: structureName,
 		}
 
 		schemaInfo.schema = NewGraphQLSchema(val, schemaInfo)
+		g.prototypes[structureName] = schemaInfo
+		g.routeNames[utils.KebabCaseString(schemaInfo.Name())] = structureName
 	}
 	return schemaInfo
 }
@@ -429,8 +437,8 @@ func (i *BeanGraphQLSchemaInfo) HandlerQuery(ctx iris.Context) {
 	}
 }
 
-// RegisterGraphQLModels register models as graphql api
-func RegisterGraphQLModels(app router.Party, beans []interface{}) error {
+// RegisterGraphQLRoutes register models as graphql api
+func RegisterGraphQLRoutes(app router.Party, beans []interface{}) error {
 	var errMessages = []string{}
 	for _, bean := range beans {
 		schemaInfo := GraphQL().GetGraphQLSchemaInfo(bean)
@@ -443,6 +451,86 @@ func RegisterGraphQLModels(app router.Party, beans []interface{}) error {
 		logger.Info.Printf("Registering graphql handler for %s %s/%s", schemaInfo.Name(), app.GetRelPath(), routeName)
 		app.Get("/"+routeName, schemaInfo.HandlerQuery)
 		app.Post("/"+routeName, schemaInfo.HandlerQuery)
+	}
+	if len(errMessages) > 0 {
+		return errors.New(strings.Join(errMessages, ";"))
+	}
+	return nil
+}
+
+func handlerMQGraphQLMessage(m mqenv.MQConsumerMessage) {
+	routeName := m.RoutingKey
+	lastIdx := strings.LastIndex(routeName, ".")
+	if lastIdx >= 0 {
+		routeName = routeName[lastIdx+1:]
+	}
+	schemaKey := GraphQL().routeNames[routeName]
+	var responseContent []byte
+	for {
+		if "" == schemaKey {
+			logger.Warning.Printf("Could not get GraphQL schema by routing name:%s", routeName)
+			responseContent = []byte(fmt.Sprintf("Could not get GraphQL schema by routing name:%s", routeName))
+			break
+		}
+		schemaInfo := GraphQL().prototypes[schemaKey]
+		if nil == schemaInfo {
+			logger.Warning.Printf("Could not get GraphQL schema by routing name:%s", routeName)
+			responseContent = []byte(fmt.Sprintf("Could not get GraphQL schema by routing name:%s", routeName))
+			break
+		}
+		query := string(m.Body)
+		result := ExecuteGraphQLQuery(query, schemaInfo.schema)
+		responseBody, err := json.Marshal(result)
+		if nil != err {
+			logger.Error.Printf("Serializing GraphQL executes query result failed with error:%v", err)
+			responseContent = []byte(err.Error())
+			break
+		}
+		responseContent = responseBody
+		break
+	}
+
+	// response
+	mqCategory := m.ConsumerTag
+	publishMessage := mqenv.MQPublishMessage{
+		Body:          responseContent,
+		RoutingKey:    m.ReplyTo,
+		CorrelationID: m.CorrelationID,
+		EventLabel:    "",
+		Headers:       map[string]string{},
+	}
+	mq.PublishMQ(mqCategory, &publishMessage)
+}
+
+// RegisterGraphQLMQs register models as graphql mq api
+func RegisterGraphQLMQs(mqConfigCategory string, responseMQConfigCategory string, beans []interface{}) error {
+	var errMessages = []string{}
+	mqConfig := mq.GetMQConfig(mqConfigCategory)
+	if nil == mqConfig {
+		logger.Error.Printf("Registering GraphQL MQ handlers while could not get MQ config by category:%s", mqConfigCategory)
+		return fmt.Errorf("Could not get MQ config by category:%s", mqConfigCategory)
+	}
+	consumeProxy := &mqenv.MQConsumerProxy{
+		Queue:       mqConfig.Queue,
+		Callback:    handlerMQGraphQLMessage,
+		ConsumerTag: responseMQConfigCategory,
+		AutoAck:     true,
+	}
+	err := mq.ConsumeMQ(mqConfigCategory, consumeProxy)
+	if nil != err {
+		logger.Error.Printf("Registering GraphQL MQ handlers by category:%s failed with error:%v", mqConfigCategory, err)
+		return err
+	}
+	for _, bean := range beans {
+		schemaInfo := GraphQL().GetGraphQLSchemaInfo(bean)
+		if nil == schemaInfo {
+			logger.Error.Printf("Get graphql schema info by bean:%v failed for registering GraphQL MQ", bean)
+			errMessages = append(errMessages, fmt.Sprintf("%v were invalid for registering GraphQL MQ", bean))
+			continue
+		}
+		routeName := utils.KebabCaseString(schemaInfo.Name())
+		logger.Info.Printf("Registering graphql MQ handler for %s %s %s", schemaInfo.Name(), mqConfigCategory, routeName)
+		GraphQL().routeNames[routeName] = schemaInfo.structureName
 	}
 	if len(errMessages) > 0 {
 		return errors.New(strings.Join(errMessages, ";"))
