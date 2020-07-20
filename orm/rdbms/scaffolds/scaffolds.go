@@ -187,6 +187,16 @@ func (s *ProjectScaffolds) GetProjectSubFolderPath(tagName string) string {
 
 // GenerateModel by model defination
 func (s *ProjectScaffolds) GenerateModel(model *ModelScaffolds) error {
+	modelFolder := ""
+	if nil != s.creatingDirs {
+		modelFolder = s.creatingDirs["modelsFolder"]
+	}
+	if "" == modelFolder {
+		modelFolder = s.ModelsFolder
+	}
+	if utils.IsPathNotExists(modelFolder) {
+		return fmt.Errorf("The destination model folder:%s does not exists", modelFolder)
+	}
 	filePath := path.Join(s.creatingDirs["modelsFolder"], model.Path)
 	err := writeFileContents(filePath, model.Encode(), false)
 	if nil != err {
