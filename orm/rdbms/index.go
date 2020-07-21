@@ -59,6 +59,7 @@ func GetInstance() *DataAccessEngine {
 // Init db instance with config
 func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations.DBConnectorConfig) (*xorm.Engine, error) {
 	var err error
+	var connData definations.DBConnectionData
 	if nil == dbConfig || ("" == dbConfig.Driver || "" == dbConfig.Address) {
 		if nil != dan.orms[dbDatasourceName] {
 			logger.Warning.Printf("Initializing data access engine by instance:%s with empty or invalid db config, using existing initialized engine...", dbDatasourceName)
@@ -73,14 +74,26 @@ func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 		}
 		dbConfig = &definations.DBConnectorConfig{
 			Driver:  "sqlite3",
-			Address: DefaultSqliteFile,
+			Address: "file://" + DefaultSqliteFile,
 			Db:      DefaultDatabaseName,
 		}
 	}
+	opts := definations.NewDBConnectionPoolOptionsWithDSN(dbConfig.Address)
+	if nil != opts {
+		connData, err = opts.GetConnectionData()
+		if nil != err {
+			logger.Warning.Printf("Parse database connection string:%s failed with error:%v", dbConfig.Address, err)
+		}
+	}
+	if "" == connData.Driver && "" == connData.ConnString {
+		connData.Driver = dbConfig.Driver
+		connData.ConnString = dbConfig.Address
+		connData.ConnDescription = connData.ConnString
+	}
 
-	orm, err := xorm.NewEngine(dbConfig.Driver, dbConfig.Address)
+	orm, err := xorm.NewEngine(connData.Driver, connData.ConnString)
 	if nil != err {
-		logger.Error.Printf("New database connection engine with driver:%s and address:%s failed with error:%v", dbConfig.Driver, dbConfig.Address, err)
+		logger.Error.Printf("New database connection engine with driver:%s and address:%s failed with error:%v", connData.Driver, connData.ConnDescription, err)
 		return nil, err
 	}
 	orm.TZLocation = time.Local
@@ -97,6 +110,7 @@ func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 	}
 
 	dan.orms[dbDatasourceName] = orm
+	logger.Info.Printf("Initialize database connection engine with driver:%s and address:%s succeed", connData.Driver, connData.ConnDescription)
 
 	return orm, nil
 }

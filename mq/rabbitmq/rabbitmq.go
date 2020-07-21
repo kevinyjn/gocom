@@ -269,7 +269,6 @@ func (r *RabbitMQ) initConn() error {
 
 	go func() {
 		ticker := time.NewTicker(AMQPReconnectDuration * time.Second)
-		quitTiker := make(chan struct{})
 		for {
 			select {
 			case <-ticker.C:
@@ -282,9 +281,7 @@ func (r *RabbitMQ) initConn() error {
 					logger.Info.Printf("Connecting amqp:%s:%d/%s by user:%s succeed", cnf.Host, cnf.Port, cnf.Path, cnf.User)
 					r.connecting = false
 					r.Conn = conn
-					if nil != quitTiker {
-						close(quitTiker)
-					}
+					ticker.Stop()
 					r.Channel, err = createChannel(conn, r.Config)
 					if err != nil {
 						conn.Close()
@@ -300,9 +297,6 @@ func (r *RabbitMQ) initConn() error {
 						return
 					}
 				}
-			case <-quitTiker:
-				ticker.Stop()
-				return
 			}
 		}
 	}()

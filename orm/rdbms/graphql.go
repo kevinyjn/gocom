@@ -402,24 +402,8 @@ func (i *BeanGraphQLSchemaInfo) HandlerQuery(ctx iris.Context) {
 			}
 		}
 		break
-	case "POST":
-		body, err := ctx.Request().GetBody()
-		if nil != err {
-			logger.Error.Printf("GraphQL %s handler get post body failed with error:%v", i.schemaType.Name(), err)
-			ctx.StatusCode(iris.StatusInternalServerError)
-			ctx.WriteString(err.Error())
-			return
-		}
-		defer body.Close()
-		var bodyBytes []byte
-		_, err = body.Read(bodyBytes)
-		if nil != err {
-			logger.Error.Printf("GraphQL %s handler get post body failed with error:%v", i.schemaType.Name(), err)
-			ctx.StatusCode(iris.StatusInternalServerError)
-			ctx.WriteString(err.Error())
-			return
-		}
-		query = string(bodyBytes)
+	case "POST", "PUT", "PATCH":
+		query = ctx.FormValue("query")
 	default:
 		ctx.StatusCode(iris.StatusMethodNotAllowed)
 		ctx.WriteString("Method not allowed")
