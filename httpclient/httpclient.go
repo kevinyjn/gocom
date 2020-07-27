@@ -193,6 +193,9 @@ func HTTPURLRequestWithoutBody(method string, queryURL string, params *map[strin
 	if params != nil {
 		v := url.Values{}
 		for pk, pv := range *params {
+			if nil == pv {
+				continue
+			}
 			if reflect.TypeOf(pv).Kind() == reflect.Map {
 				for mk, mv := range pv.(map[string]interface{}) {
 					vk := fmt.Sprintf(pk+"[%v]", mk)
