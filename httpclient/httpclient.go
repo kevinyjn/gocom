@@ -188,6 +188,36 @@ func HTTPGetJSONList(queryURL string, params *map[string]interface{}, options ..
 	return HTTPQuery("GET", queryURL, nil, options...)
 }
 
+// HTTPURLRequestWithoutBody URL parameter transfer without body
+func HTTPURLRequestWithoutBody(method string, queryURL string, params *map[string]interface{}, options ...ClientOption) ([]byte, error) {
+	if params != nil {
+		v := url.Values{}
+		for pk, pv := range *params {
+			if nil == pv {
+				continue
+			}
+			if reflect.TypeOf(pv).Kind() == reflect.Map {
+				for mk, mv := range pv.(map[string]interface{}) {
+					vk := fmt.Sprintf(pk+"[%v]", mk)
+					v.Add(vk, utils.ToString(mv))
+				}
+			} else {
+				v.Add(pk, utils.ToString(pv))
+			}
+		}
+		urlParams := v.Encode()
+		if urlParams != "" {
+			sep := "?"
+			if strings.Contains(queryURL, "?") {
+				sep = "&"
+			}
+			queryURL = queryURL + sep + urlParams
+		}
+	}
+	logger.Trace.Printf("HTTPURLRequestWithoutBody queryURL: %s", queryURL)
+	return HTTPQuery(method, queryURL, nil, options...)
+}
+
 // HTTPPostJSON request and response as json
 func HTTPPostJSON(queryURL string, params map[string]interface{}, options ...ClientOption) (map[string]interface{}, error) {
 	body, err := json.Marshal(params)
