@@ -148,6 +148,8 @@ func ToFloat(val interface{}) float32 {
 			return float32(v)
 		}
 		return 0
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float64:
+		return float32(ToInt64(val))
 	}
 	return val.(float32)
 }
@@ -164,6 +166,8 @@ func ToDouble(val interface{}) float64 {
 			return v
 		}
 		return 0
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
+		return float64(ToInt64(val))
 	}
 	return val.(float64)
 }
@@ -235,15 +239,15 @@ func TimestampToHuman(format string, ts int64) string {
 // TimeToHuman formatter
 func TimeToHuman(format string, t time.Time) string {
 	switch format {
-	case "YYYYMMDD":
+	case "YYYYMMDD", "yyyyMMdd":
 		return t.Format("20060102")
-	case "YYYYMMDDHHmmss":
+	case "YYYYMMDDHHmmss", "yyyyMMddHHmmss":
 		return t.Format("20060102150405")
-	case "YYYY-MM-DD":
+	case "YYYY-MM-DD", "yyyy-MM-dd":
 		return t.Format("2006-01-02")
-	case "YYYY-MM-DD HH:mm:ss":
+	case "YYYY-MM-DD HH:mm:ss", "yyyy-MM-dd HH:mm:ss":
 		return t.Format("2006-01-02 15:04:05")
-	case "YYYY/MM/DD HH:mm:ss":
+	case "YYYY/MM/DD HH:mm:ss", "yyyy/MM/dd HH:mm:ss":
 		return t.Format("2006/01/02 15:04:05")
 	}
 	return t.Format("2006-01-02 15:04:05")
@@ -253,15 +257,15 @@ func TimeToHuman(format string, t time.Time) string {
 func HumanToTimestamp(format string, v string) int64 {
 	var t time.Time
 	switch format {
-	case "YYYYMMDD":
+	case "YYYYMMDD", "yyyyMMdd":
 		t, _ = time.Parse("20060102", v)
-	case "YYYYMMDDHHmmss":
+	case "YYYYMMDDHHmmss", "yyyyMMddHHmmss":
 		t, _ = time.Parse("20060102150405", v)
-	case "YYYY-MM-DD":
+	case "YYYY-MM-DD", "yyyy-MM-dd":
 		t, _ = time.Parse("2006-01-02", v)
-	case "YYYY-MM-DD HH:mm:ss":
+	case "YYYY-MM-DD HH:mm:ss", "yyyy-MM-dd HH:mm:ss":
 		t, _ = time.Parse("2006-01-02 15:04:05", v)
-	case "YYYY/MM/DD HH:mm:ss":
+	case "YYYY/MM/DD HH:mm:ss", "yyyy/MM/dd HH:mm:ss":
 		t, _ = time.Parse("2006/01/02 15:04:05", v)
 	default:
 		t, _ = time.Parse("2006-01-02 15:04:05", v)
