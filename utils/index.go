@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"log"
 	"math/rand"
 	"net/http"
@@ -627,4 +628,18 @@ func KebabCaseString(s string) string {
 		data = append(data, d)
 	}
 	return strings.ToLower(string(data[:]))
+}
+
+// HashCode hashes a buffer to a unique hashcode
+func HashCode(content []byte) uint32 {
+	return crc32.ChecksumIEEE(content)
+}
+
+// HashCodeAsInt hashes a buffer to a unique hashcode
+func HashCodeAsInt(content []byte) int {
+	v := int(crc32.ChecksumIEEE(content))
+	if 0 > v {
+		return -v
+	}
+	return v
 }
