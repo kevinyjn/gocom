@@ -15,7 +15,7 @@ require (
 	github.com/go-redis/redis v6.15.8+incompatible
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/go-xorm/xorm v0.7.9
-	github.com/godror/godror v0.14.0
+	github.com/godror/godror v0.18.0
 	github.com/gorilla/schema v1.1.0 // indirect
 	github.com/graphql-go/graphql v0.7.9
 	github.com/iris-contrib/blackfriday v2.0.0+incompatible // indirect
