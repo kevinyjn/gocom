@@ -69,7 +69,7 @@ func Init(mqConfigFile string, mqConfigs map[string]mqenv.MQConnectorConfig) err
 	return lastErr
 }
 
-func InitMQWithDB(mqEnvMqs *RoutesEnv.MQs, mqConfigs map[string]mqenv.MQConnectorConfig) error {
+func InitMQWithDB(mqEnvMqs map[string]Config, mqConfigs map[string]mqenv.MQConnectorConfig) error {
 	var lastErr error
 	for category, cnf := range mqEnvMqs {
 		instCnf, ok := mqConfigs[cnf.Instance]
