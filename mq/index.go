@@ -101,7 +101,7 @@ func InitMQWithDB(mqEnvMqs map[string]Config, mqConfigs map[string]mqenv.MQConne
 			}
 
 			if initErr != nil {
-				logger.Error.Printf("Initialize mq:%s failed with error:%s", category, initErr.Error())
+				logger.Error.Printf("Initialize mq:%s failed with error: %s", category, initErr.Error())
 				lastErr = initErr
 			}
 		}
