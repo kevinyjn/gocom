@@ -69,10 +69,9 @@ func Init(mqConfigFile string, mqConfigs map[string]mqenv.MQConnectorConfig) err
 	return lastErr
 }
 
-func InitMQWithDB(mqEnv *RoutesEnv, mqConfigs map[string]mqenv.MQConnectorConfig) error {
+func InitMQWithDB(mqEnvMqs *RoutesEnv.MQs, mqConfigs map[string]mqenv.MQConnectorConfig) error {
 	var lastErr error
-	mqRoutesEnv = mqEnv
-	for category, cnf := range mqEnv.MQs {
+	for category, cnf := range mqEnvMqs {
 		instCnf, ok := mqConfigs[cnf.Instance]
 		if ok == false {
 			logger.Error.Printf("Initialize mq:%s with connection instance:%s failed, the instance not configured.", category, cnf.Instance)
