@@ -71,6 +71,7 @@ func Init(mqConfigFile string, mqConfigs map[string]mqenv.MQConnectorConfig) err
 
 func InitMQWithDB(mqEnv *RoutesEnv, mqConfigs map[string]mqenv.MQConnectorConfig) error {
 	var lastErr error
+	mqRoutesEnv = mqEnv
 	for category, cnf := range mqEnv.MQs {
 		instCnf, ok := mqConfigs[cnf.Instance]
 		if ok == false {
