@@ -69,46 +69,6 @@ func Init(mqConfigFile string, mqConfigs map[string]mqenv.MQConnectorConfig) err
 	return lastErr
 }
 
-func InitMQWithDB(mqEnvMqs map[string]Config, mqConfigs map[string]mqenv.MQConnectorConfig) error {
-	var lastErr error
-	for category, cnf := range mqEnvMqs {
-		instCnf, ok := mqConfigs[cnf.Instance]
-		if ok == false {
-			logger.Error.Printf("Initialize mq:%s with connection instance:%s failed, the instance not configured.", category, cnf.Instance)
-			lastErr = fmt.Errorf("Initialize mq:%s with connection instance:%s failed, the instance not configured", category, cnf.Instance)
-		} else {
-			var initErr error
-			mqCategoryDrivers[category] = instCnf.Driver
-			if instCnf.Driver == mqenv.DriverTypeAMQP {
-				amqpCfg := &rabbitmq.AMQPConfig{
-					Queue:           cnf.Queue,
-					QueueDurable:    cnf.Durable,
-					BindingExchange: cnf.Exchange.Name != "",
-					ExchangeName:    cnf.Exchange.Name,
-					ExchangeType:    cnf.Exchange.Type,
-					BindingKey:      cnf.BindingKey,
-				}
-				if cnf.RPCEnabled {
-					continue
-				}
-				_, initErr = rabbitmq.InitRabbitMQ(category, &instCnf, amqpCfg)
-			} else if mqenv.DriverTypeKafka == instCnf.Driver {
-				kafkaCfg := &kafka.Config{
-					Topic:   cnf.Topic,
-					GroupID: cnf.GroupID,
-				}
-				_, initErr = kafka.InitKafka(category, &instCnf, kafkaCfg)
-			}
-
-			if initErr != nil {
-				logger.Error.Printf("Initialize mq:%s failed with error: %s", category, initErr.Error())
-				lastErr = initErr
-			}
-		}
-	}
-	return lastErr
-}
-
 // InitMQWithRPC init mq with RPC
 func InitMQWithRPC(key string, rpcType int, connCfg *mqenv.MQConnectorConfig, mqCfg *Config) error {
 	if mqCfg == nil || connCfg == nil {
