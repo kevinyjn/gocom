@@ -101,7 +101,7 @@ func (o *DBConnectionPoolOptions) ParseDSN() error {
 					o.Password = utils.URLDecode(slices[1])
 				}
 			}
-			if !strings.HasPrefix(dsn, "(") {
+			if !strings.HasPrefix(dsn, "(") && !strings.HasPrefix(dsn, "@(") {
 				return o.parseCommonDSN(dsn)
 			}
 			r, _ := regexp.Compile(`\((?:host|HOST)=([\w\.\d]+)\)`)

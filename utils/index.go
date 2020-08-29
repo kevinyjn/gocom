@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -217,6 +218,23 @@ func IsEmpty(val interface{}) bool {
 		return val.(string) == ""
 	}
 	return val.(string) == ""
+}
+
+// IsNumberic boolean
+func IsNumberic(val interface{}) bool {
+	var isNumberic bool
+	switch val.(type) {
+	case int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8:
+		isNumberic = true
+		break
+	case float32, float64:
+		isNumberic = true
+		break
+	default:
+		isNumberic = regexp.MustCompile(`\d+`).MatchString(ToString(val))
+		break
+	}
+	return isNumberic
 }
 
 // ObjectIDToString convert objectid to string
