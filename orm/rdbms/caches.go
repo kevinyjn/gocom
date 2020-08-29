@@ -344,6 +344,10 @@ func (c *cacheElementGroup) runTimeoutsCheck() {
 
 func (c *cacheElementGroup) cleanTimeouts(tim time.Time) {
 	now := tim.Unix()
+	if nil == c.timerObjects {
+		logger.Error.Printf("cacheElementGroup clean timeouts while timerObjects empty!")
+		return
+	}
 	timeoutsIndex := 0
 	for i, e := range c.timerObjects.Elements() {
 		if e.OrderingValue() > now {
