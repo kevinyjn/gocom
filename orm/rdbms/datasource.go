@@ -38,7 +38,7 @@ type IGetDatasource interface {
 // Fetch retrieve record data from table, bean's non-empty fields are conditions
 func (s *Datasource) Fetch(bean interface{}) (bool, error) {
 	if reflect.TypeOf(bean).Kind() != reflect.Ptr {
-		logger.Error.Printf("Fetching bean:%v failed, the operation needs a pointer passive", bean)
+		logger.Error.Printf("Fetching bean:%+v failed, the operation needs a pointer passive", bean)
 	}
 	return GetInstance().FetchOne(bean)
 }
@@ -46,7 +46,23 @@ func (s *Datasource) Fetch(bean interface{}) (bool, error) {
 // Save record data to table
 func (s *Datasource) Save(bean interface{}) (bool, error) {
 	if reflect.TypeOf(bean).Kind() != reflect.Ptr {
-		logger.Error.Printf("Saving bean:%v failed, the operation needs a pointer passive", bean)
+		logger.Error.Printf("Saving bean:%+v failed, the operation needs a pointer passive", bean)
 	}
 	return GetInstance().SaveOne(bean)
+}
+
+// Exists by record
+func (s *Datasource) Exists(bean interface{}) (bool, error) {
+	if reflect.TypeOf(bean).Kind() != reflect.Ptr {
+		logger.Error.Printf("Exists checking bean:%+v failed, the operation needs a pointer passive", bean)
+	}
+	return GetInstance().Exists(bean)
+}
+
+// Count record
+func (s *Datasource) Count(bean interface{}) (int64, error) {
+	if reflect.TypeOf(bean).Kind() != reflect.Ptr {
+		logger.Error.Printf("Count bean:%+v failed, the operation needs a pointer passive", bean)
+	}
+	return GetInstance().Count(bean)
 }
