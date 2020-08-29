@@ -3,6 +3,7 @@ package rdbms
 import (
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/kevinyjn/gocom/logger"
@@ -21,14 +22,18 @@ const (
 // dataCaches cacher
 type dataCaches struct {
 	elementGroups map[string]*cacheElementGroup // map[schemaStructureFullName]*cacheElementGroup
+	mutex         sync.RWMutex
+}
+
+var _caches = &dataCaches{
+	elementGroups: map[string]*cacheElementGroup{},
+	mutex:         sync.RWMutex{},
 }
 
 type cacheElementGroup struct {
 	cachingDurationSeconds int64
-	objects                map[string]*cacheElement // map[conditionBean]*cacheElement
-	arrayObjects           map[string]*cacheElement // map[conditionBean]*cacheElement{data:[]rowPrimaryKeyText}
-	timerObjects           queues.IQueue
-	arrayTimerObjects      queues.IQueue
+	objects                *cacheElementWrapper // map[conditionBean]*cacheElement
+	arrayObjects           *cacheElementWrapper // map[conditionBean]*cacheElement{data:[]rowPrimaryKeyText}
 	timeoutsTicker         *time.Ticker
 	pkColumns              []*core.Column
 }
@@ -41,8 +46,76 @@ type cacheElement struct {
 	data      interface{}
 }
 
-var _caches = &dataCaches{
-	elementGroups: map[string]*cacheElementGroup{},
+type cacheElementWrapper struct {
+	objects      map[string]*cacheElement // map[conditionBean]*cacheElement
+	timerObjects queues.IQueue
+	mutex        sync.RWMutex
+}
+
+func newCacheElementWrapper() *cacheElementWrapper {
+	return &cacheElementWrapper{
+		objects:      map[string]*cacheElement{},
+		timerObjects: queues.NewAscOrderingQueue(),
+		mutex:        sync.RWMutex{},
+	}
+}
+
+func (w *cacheElementWrapper) reset() {
+	w.mutex.Lock()
+	w.objects = map[string]*cacheElement{}
+	w.timerObjects = queues.NewAscOrderingQueue()
+	w.mutex.Unlock()
+}
+
+func (w *cacheElementWrapper) get(key string, removeTimerIfExists bool) *cacheElement {
+	w.mutex.RLock()
+	item := w.objects[key]
+	w.mutex.RUnlock()
+	if removeTimerIfExists && nil != item {
+		w.mutex.Lock()
+		delete(w.objects, key)
+		w.timerObjects.Remove(item)
+		w.mutex.Unlock()
+	}
+	return item
+}
+
+func (w *cacheElementWrapper) remove(key string) *cacheElement {
+	w.mutex.RLock()
+	item := w.objects[key]
+	w.mutex.RUnlock()
+	if nil != item {
+		w.mutex.Lock()
+		delete(w.objects, key)
+		w.timerObjects.Remove(item)
+		w.mutex.Unlock()
+	}
+	return item
+}
+
+func (w *cacheElementWrapper) set(key string, item *cacheElement) {
+	w.mutex.Lock()
+	w.objects[key] = item
+	w.timerObjects.Push(item)
+	w.mutex.Unlock()
+}
+
+func (w *cacheElementWrapper) cleanTimeouts(now int64) {
+	w.mutex.Lock()
+	timeoutsIndex := 0
+	for i, e := range w.timerObjects.Elements() {
+		if e.OrderingValue() > now {
+			timeoutsIndex = i
+			break
+		}
+	}
+	if 0 < timeoutsIndex {
+		cuts := w.timerObjects.CutBefore(timeoutsIndex)
+		for _, e := range cuts {
+			delete(w.objects, e.GetID())
+		}
+	}
+	w.mutex.Unlock()
 }
 
 func getCaches() *dataCaches {
@@ -50,18 +123,20 @@ func getCaches() *dataCaches {
 }
 
 func (c *dataCaches) group(schemaStructureFullName string) *cacheElementGroup {
+	c.mutex.RLock()
 	eg := c.elementGroups[schemaStructureFullName]
+	c.mutex.RUnlock()
 	if nil == eg {
 		eg = &cacheElementGroup{
 			cachingDurationSeconds: DefaultCachingDurationSeconds,
-			objects:                map[string]*cacheElement{},
-			arrayObjects:           map[string]*cacheElement{},
-			timerObjects:           queues.NewAscOrderingQueue(),
-			arrayTimerObjects:      queues.NewAscOrderingQueue(),
+			objects:                newCacheElementWrapper(),
+			arrayObjects:           newCacheElementWrapper(),
 			timeoutsTicker:         nil,
 			pkColumns:              nil,
 		}
+		c.mutex.Lock()
 		c.elementGroups[schemaStructureFullName] = eg
+		c.mutex.Unlock()
 		go eg.runTimeoutsCheck()
 	}
 	return eg
@@ -76,14 +151,9 @@ func (c *cacheElementGroup) set(bean interface{}, condiBean interface{}, pkCondi
 		return
 	}
 	if len(c.pkColumns) <= 0 && "" == pkKey {
-		c.objects = map[string]*cacheElement{}
-		c.timerObjects = queues.NewAscOrderingQueue()
+		c.objects.reset()
 	}
-	existsEle := c.objects[key]
-	if nil != existsEle {
-		// clean timer queue ralated element
-		c.timerObjects.Remove(existsEle)
-	}
+	existsEle := c.objects.get(key, true)
 	ele := &cacheElement{
 		expiresAt: now + c.cachingDurationSeconds,
 		key:       key,
@@ -93,23 +163,19 @@ func (c *cacheElementGroup) set(bean interface{}, condiBean interface{}, pkCondi
 		// Many times would caused by saving record
 		if nil != existsEle && nil != existsEle.refKeys {
 			for k := range existsEle.refKeys {
-				existsEle2 := c.objects[k]
-				if nil != existsEle2 {
-					delete(c.objects, k)
-					c.timerObjects.Remove(existsEle2)
-				}
+				c.objects.remove(k)
 			}
 		}
 		ele.refKeys = map[string]bool{}
 	} else {
-		existsEle = c.objects[pkKey]
+		existsEle = c.objects.get(pkKey, false)
 		var refKeys map[string]bool
 		if nil != existsEle {
 			refKeys = existsEle.refKeys
 			if nil == refKeys {
 				refKeys = map[string]bool{}
 			}
-			c.timerObjects.Remove(existsEle)
+			c.objects.remove(pkKey)
 		} else {
 			refKeys = map[string]bool{}
 		}
@@ -120,19 +186,17 @@ func (c *cacheElementGroup) set(bean interface{}, condiBean interface{}, pkCondi
 			data:      setBean,
 			refKeys:   refKeys,
 		}
-		c.objects[pkKey] = pkEle
-		c.timerObjects.Push(pkEle)
+		c.objects.set(pkKey, pkEle)
 
 		ele.data = nil
 		ele.depKey = pkKey
 	}
-	c.objects[key] = ele
-	c.timerObjects.Push(ele)
+	c.objects.set(key, ele)
 }
 
 func (c *cacheElementGroup) get(condiBean interface{}, cloneResult bool) (interface{}, string, bool) {
 	key := c.serializeCondition(condiBean)
-	e := c.objects[key]
+	e := c.objects.get(key, false)
 	now := time.Now().Unix()
 	var bean interface{} = nil
 	var err error
@@ -154,7 +218,7 @@ func (c *cacheElementGroup) get(condiBean interface{}, cloneResult bool) (interf
 			ok = true
 			break
 		}
-		pkEle = c.objects[e.depKey]
+		pkEle = c.objects.get(e.depKey, false)
 		if nil == pkEle || now > pkEle.expiresAt {
 			break
 		}
@@ -172,14 +236,11 @@ func (c *cacheElementGroup) get(condiBean interface{}, cloneResult bool) (interf
 	if false == ok {
 		if nil == pkEle {
 			if nil != e {
-				c.timerObjects.Remove(e)
-				delete(c.objects, key)
+				c.objects.remove(key)
 			}
 		} else {
-			c.timerObjects.Remove(e)
-			c.timerObjects.Remove(pkEle)
-			delete(c.objects, e.depKey)
-			delete(c.objects, key)
+			c.objects.remove(key)
+			c.objects.remove(e.depKey)
 		}
 	}
 	return bean, key, ok
@@ -187,19 +248,14 @@ func (c *cacheElementGroup) get(condiBean interface{}, cloneResult bool) (interf
 
 func (c *cacheElementGroup) del(condiBean interface{}) {
 	key := c.serializeCondition(condiBean)
-	e := c.objects[key]
+	e := c.objects.get(key, false)
 	if nil != e {
 		if len(e.refKeys) > 0 {
 			for k := range e.refKeys {
-				re := c.objects[k]
-				if nil != re {
-					delete(c.objects, k)
-					c.timerObjects.Remove(re)
-				}
+				c.objects.remove(k)
 			}
 		}
-		delete(c.objects, key)
-		c.timerObjects.Remove(e)
+		c.objects.remove(key)
 	}
 }
 
@@ -215,11 +271,7 @@ func (c *cacheElementGroup) setArray(condiBean interface{}, beans []interface{},
 	var err error
 	key := fmt.Sprintf("%d:%d:%s", limit, offset, c.serializeCondition(condiBean))
 	cacheObjects := make([]string, len(beans))
-	existsEle := c.arrayObjects[key]
-	if nil != existsEle {
-		// clean timer queue ralated element
-		c.arrayTimerObjects.Remove(existsEle)
-	}
+	c.arrayObjects.get(key, true)
 	for i, bean := range beans {
 		pkCondiBean, pkValues, err = formatPkConditionBeanImpl(c.pkColumns, reflect.ValueOf(bean).Elem())
 		if 0 >= pkValues {
@@ -235,8 +287,7 @@ func (c *cacheElementGroup) setArray(condiBean interface{}, beans []interface{},
 		key:       key,
 		data:      cacheObjects,
 	}
-	c.arrayObjects[key] = ele
-	c.arrayTimerObjects.Push(ele)
+	c.arrayObjects.set(key, ele)
 }
 
 // getArray records from cache
@@ -247,13 +298,12 @@ func (c *cacheElementGroup) setArray(condiBean interface{}, beans []interface{},
 func (c *cacheElementGroup) getArray(condiBean interface{}, records *[]interface{}, limit, offset int) (string, bool) {
 	var ok bool = false
 	key := fmt.Sprintf("%d:%d:%s", limit, offset, c.serializeCondition(condiBean))
-	e := c.arrayObjects[key]
+	e := c.arrayObjects.get(key, false)
 	now := time.Now().Unix()
 	if nil == e {
 		return key, ok
 	} else if now > e.expiresAt {
-		c.arrayTimerObjects.Remove(e)
-		delete(c.arrayObjects, key)
+		c.arrayObjects.remove(key)
 		return key, ok
 	}
 	pkeys := e.data.([]string)
@@ -261,7 +311,7 @@ func (c *cacheElementGroup) getArray(condiBean interface{}, records *[]interface
 	ok = true
 	var beanType reflect.Type
 	for i, pkey := range pkeys {
-		one := c.objects[pkey]
+		one := c.objects.get(pkey, false)
 		if nil == one {
 			ok = false
 			break
@@ -332,7 +382,7 @@ func (c *cacheElementGroup) runTimeoutsCheck() {
 	if nil != c.timeoutsTicker {
 		return
 	}
-	c.timeoutsTicker = time.NewTicker(time.Duration(DefaultCachingDurationSeconds / 2))
+	c.timeoutsTicker = time.NewTicker(time.Duration(DefaultCachingDurationSeconds/2) * time.Second)
 	for nil != c.timeoutsTicker {
 		select {
 		case tim := <-c.timeoutsTicker.C:
@@ -344,36 +394,8 @@ func (c *cacheElementGroup) runTimeoutsCheck() {
 
 func (c *cacheElementGroup) cleanTimeouts(tim time.Time) {
 	now := tim.Unix()
-	if nil == c.timerObjects {
-		logger.Error.Printf("cacheElementGroup clean timeouts while timerObjects empty!")
-		return
-	}
-	timeoutsIndex := 0
-	for i, e := range c.timerObjects.Elements() {
-		if e.OrderingValue() > now {
-			timeoutsIndex = i
-			break
-		}
-	}
-	if 0 < timeoutsIndex {
-		cuts := c.timerObjects.CutBefore(timeoutsIndex)
-		for _, e := range cuts {
-			delete(c.objects, e.GetID())
-		}
-	}
-	timeoutsIndex = 0
-	for i, e := range c.arrayTimerObjects.Elements() {
-		if e.OrderingValue() > now {
-			timeoutsIndex = i
-			break
-		}
-	}
-	if 0 < timeoutsIndex {
-		cuts := c.arrayTimerObjects.CutBefore(timeoutsIndex)
-		for _, e := range cuts {
-			delete(c.arrayObjects, e.GetID())
-		}
-	}
+	c.objects.cleanTimeouts(now)
+	c.arrayObjects.cleanTimeouts(now)
 }
 
 // GetID caching key
