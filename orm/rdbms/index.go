@@ -277,6 +277,27 @@ func (dan *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
 	return true, nil
 }
 
+// Exists check record exists from table, bean's non-empty fields are conditions.
+// The bean should be a pointer to a struct
+func (dan *DataAccessEngine) Exists(bean interface{}) (bool, error) {
+	structureName, orm, err := dan.getDbEngineWithStructureName(bean)
+	if nil != err {
+		logger.Error.Printf("Fetching record by table:%s on condition:%v while get database engine failed with error:%v", getTableName(bean), bean, err)
+		return false, err
+	}
+	cacheGroup := getCaches().group(structureName)
+	_, _, ok := cacheGroup.get(bean, false)
+	if ok {
+		return true, nil
+	}
+	ok, err = orm.Exist(bean)
+	if nil != err {
+		logger.Error.Printf("Checking record:%+v exists got error:%v", bean, err)
+		return false, err
+	}
+	return ok, err
+}
+
 // Count record counts from table, bean's non-empty fields are conditions.
 func (dan *DataAccessEngine) Count(bean interface{}) (int64, error) {
 	_, orm, err := dan.getDbEngineWithStructureName(bean)
