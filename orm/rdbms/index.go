@@ -223,7 +223,7 @@ func (dan *DataAccessEngine) FetchOne(bean interface{}) (bool, error) {
 		pkCondiBean, _ := dan.getPkConditionBean(orm, structureName, bean)
 		cacheGroup.set(bean, condiBean, pkCondiBean)
 	} else {
-		logger.Warning.Printf("Fetching record by table:%s on condition:%+v while there is no such record", getTableName(bean), bean)
+		logger.Info.Printf("Fetching record by table:%s on condition:%+v while there is no such record", getTableName(bean), bean)
 	}
 	return has, err
 }
