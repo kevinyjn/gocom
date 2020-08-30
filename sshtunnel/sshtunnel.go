@@ -18,23 +18,39 @@ import (
 
 // TunnelForwarder ssh tunnel
 type TunnelForwarder struct {
-	Host       string
-	Port       int
-	User       string
-	Password   string
-	RemoteHost string
-	RemotePort int
-	localHost  string
-	localPort  int
-	client     *ssh.Client
-	sshConfig  *ssh.ClientConfig
-	local      net.Listener
-	remote     net.Conn
+	Host        string
+	Port        int
+	User        string
+	Password    string
+	RemoteHost  string
+	RemotePort  int
+	localHost   string
+	localPort   int
+	sshConfig   *ssh.ClientConfig
+	localServer net.Listener
 }
 
 var (
 	localListenPort = 13110
 )
+
+// NewSSHTunnel TunnelForwarder
+func NewSSHTunnel(dsn string, remoteHost string, remotePort int) (*TunnelForwarder, error) {
+	sshTunnel := &TunnelForwarder{
+		localHost:  "127.0.0.1",
+		localPort:  0,
+		RemoteHost: remoteHost,
+		RemotePort: remotePort,
+	}
+	if "" != dsn {
+		err := sshTunnel.ParseFromDSN(dsn)
+		if nil != err {
+			logger.Error.Printf("SSHTunnel parse from ssh dsn:%s failed with error:%v", dsn, err)
+			return sshTunnel, err
+		}
+	}
+	return sshTunnel, nil
+}
 
 // PrivateKeyPath getter
 func (c *TunnelForwarder) PrivateKeyPath() string {
@@ -80,49 +96,47 @@ func (c *TunnelForwarder) LocalPort() int {
 	return c.localPort
 }
 
-// Start start the ssh tunnel
-func (c *TunnelForwarder) Start() error {
-	c.localHost = "127.0.0.1"
-	c.localPort = 0
+func (c *TunnelForwarder) ensureLocalServer() (net.Listener, error) {
+	if "" == c.localHost {
+		c.localHost = "127.0.0.1"
+	}
 	var err error
 	c.sshConfig, err = c.InitUserAuth(c.User, c.Password)
 	if nil != err {
-		logger.Error.Printf("Initialize ssh tunnel %s:%d user auth failed with error:%v", c.Host, c.Port, err)
-		return err
+		logger.Error.Printf("ensure ssh tunnel %s:%d local server user auth failed with error:%v", c.Host, c.Port, err)
+		return nil, err
 	}
 
 	chkCount := 0
-	for nil == c.local && chkCount < 1000 {
+	c.localPort = 0
+	for nil == c.localServer && chkCount < 1000 {
 		localListenPort++
 		chkCount++
-		c.local, err = net.Listen("tcp", fmt.Sprintf("%s:%d", c.localHost, localListenPort))
+		c.localServer, err = net.Listen("tcp", fmt.Sprintf("%s:%d", c.localHost, localListenPort))
 		if nil == err {
 			c.localPort = localListenPort
 			break
 		}
 	}
-	if nil == c.local {
+	if nil == c.localServer {
+		return c.localServer, fmt.Errorf("ensure ssh tunnel %s:%d local server failed with max try listening count", c.Host, c.Port)
+	}
+	return c.localServer, nil
+}
+
+// Start start the ssh tunnel
+func (c *TunnelForwarder) Start() error {
+	_, err := c.ensureLocalServer()
+	if nil != err {
+		logger.Error.Printf("Initialize ssh tunnel %s:%d local server failed with error:%v", c.Host, c.Port, err)
+		return err
+	}
+	if nil == c.localServer {
 		logger.Error.Printf("Listening ssh tunnel local server failed with binding local port execeeds max failing count")
 		return errors.New("listening ssh tunnel local server failed with binding local port execeeds max failing count")
 	}
 
-	c.client, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", c.Host, c.Port), c.sshConfig)
-	if nil != err {
-		logger.Error.Printf("Dialing ssh tunnel %s:%d failed with error:%v", c.Host, c.Port, err)
-		c.local.Close()
-		return err
-	}
-	// defer c.client.Close()
-
-	c.remote, err = c.client.Dial("tcp", fmt.Sprintf("%s:%d", c.RemoteHost, c.RemotePort))
-	if nil != err {
-		logger.Error.Printf("Dialing ssh tunnel %s:%d remote connection %s:%d failed with error:%v", c.Host, c.Port, c.RemoteHost, c.RemotePort, err)
-		c.local.Close()
-		c.client.Close()
-		return err
-	}
-
-	logger.Info.Printf("ssh tunnel %s:%d for %s:%d started", c.Host, c.Port, c.RemoteHost, c.RemotePort)
+	logger.Info.Printf("ssh tunnel local server %s:%d for ssh tunnel %s:%d for client %s:%d started", c.localHost, c.localPort, c.Host, c.Port, c.RemoteHost, c.RemotePort)
 	go c.run()
 
 	return nil
@@ -130,18 +144,9 @@ func (c *TunnelForwarder) Start() error {
 
 // Stop stop the runloop
 func (c *TunnelForwarder) Stop() {
-	if nil != c.remote {
-		logger.Info.Printf("ssh tunnel %s:%d for %s:%d stopped", c.Host, c.Port, c.RemoteHost, c.RemotePort)
-		c.remote.Close()
-		c.remote = nil
-	}
-	if nil != c.client {
-		c.client.Close()
-		c.client = nil
-	}
-	if nil != c.local {
-		c.local.Close()
-		c.local = nil
+	if nil != c.localServer {
+		c.localServer.Close()
+		c.localServer = nil
 	}
 }
 
@@ -190,10 +195,10 @@ func (c *TunnelForwarder) run() {
 	var client net.Conn
 	var err error
 	for {
-		if nil == c.local {
+		if nil == c.localServer {
 			break
 		}
-		client, err = c.local.Accept()
+		client, err = c.localServer.Accept()
 		if nil != err {
 			logger.Warning.Printf("SSH Tunnel %s:%d handling local client connection occured with error:%v", c.Host, c.Port, err)
 			break
@@ -201,31 +206,36 @@ func (c *TunnelForwarder) run() {
 			logger.Info.Printf("SSH Tunnel %s:%d handling a new local client %s", c.Host, c.Port, client.RemoteAddr().String())
 		}
 
-		c.handlerClient(client, c.remote)
+		go c.forward(client)
+		// c.handlerClient(client, c.remote)
 	}
 }
 
-func (c *TunnelForwarder) handlerClient(client net.Conn, remote net.Conn) {
-	defer client.Close()
-	chDone := make(chan bool)
+func (c *TunnelForwarder) forward(localConn net.Conn) error {
+	// Establish connection to the intermediate server
+	sshClient, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", c.Host, c.Port), c.sshConfig)
+	if nil != err {
+		logger.Error.Printf("Dialing ssh tunnel %s:%d failed with error:%v", c.Host, c.Port, err)
+		return err
+	}
+	// defer c.sshClient.Close()
 
-	// Start remote -> local data transfer
-	go func() {
-		_, err := io.Copy(client, remote)
-		if err != nil {
-			logger.Warning.Printf("error while copy remote(%s)->local:", remote.RemoteAddr().String(), err)
-		}
-		chDone <- true
-	}()
+	remote, err := sshClient.Dial("tcp", fmt.Sprintf("%s:%d", c.RemoteHost, c.RemotePort))
+	if nil != err {
+		logger.Error.Printf("Dialing ssh tunnel %s:%d remote connection %s:%d failed with error:%v", c.Host, c.Port, c.RemoteHost, c.RemotePort, err)
+		sshClient.Close()
+		return err
+	}
 
-	// Start local -> remote data transfer
-	go func() {
-		_, err := io.Copy(remote, client)
-		if err != nil {
-			logger.Warning.Printf("error while copy local->remote(%s):", remote.RemoteAddr().String(), err)
-		}
-		chDone <- true
-	}()
+	go copyConnectionStream(localConn, remote)
+	go copyConnectionStream(remote, localConn)
+	return nil
+}
 
-	<-chDone
+// Transfer the data between  and the remote server
+func copyConnectionStream(writer, reader net.Conn) {
+	_, err := io.Copy(writer, reader)
+	if err != nil {
+		logger.Warning.Printf("error while copy %s->%s failed:%v", reader.RemoteAddr().String(), writer.RemoteAddr().String(), err)
+	}
 }
