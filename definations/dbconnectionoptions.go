@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/sshtunnel"
 	"github.com/kevinyjn/gocom/utils"
 
 	// justifying
@@ -46,6 +47,7 @@ type DBConnectionPoolOptions struct {
 	MaxWaitTime         int    `property:"Max Wait Time"`
 	MaxTotalConnections int    `property:"Max Total Connections"`
 	SSHTunnelDSN        string `property:"SSH Tunnel DSN"`
+	sshTunnel           *sshtunnel.TunnelForwarder
 }
 
 // DBConnectionData formatted connection information
@@ -235,54 +237,85 @@ func (o *DBConnectionPoolOptions) parseCommonDSN(dsn string) error {
 
 // GetConnectionData prepare dsn and format connection data
 func (o *DBConnectionPoolOptions) GetConnectionData() (DBConnectionData, error) {
-	options := o
-	dbHost := options.Host
-	dbPort := options.Port
 	connData := DBConnectionData{}
+	dbHost, dbPort, err := o.ensureSSHTunnel()
 
-	switch options.Engine {
+	switch o.Engine {
 	case EngineMSSQL:
 		connData.Driver = "sqlserver"
-		connData.ConnString = fmt.Sprintf("server=%s;user id=%s;password=%s;port=%d;database=%s;encrypt=disable", dbHost, options.User, options.Password, dbPort, options.Database)
-		connData.ConnDescription = fmt.Sprintf("mssql://%s@%s:%d/%s", options.User, options.Host, options.Port, options.Database)
+		connData.ConnString = fmt.Sprintf("server=%s;user id=%s;password=%s;port=%d;database=%s;encrypt=disable", dbHost, o.User, o.Password, dbPort, o.Database)
+		connData.ConnDescription = fmt.Sprintf("mssql://%s@%s:%d/%s", o.User, o.Host, o.Port, o.Database)
 		break
 	case EngineMySQL, EngineTiDB:
 		connData.Driver = "mysql"
 		cfg := mysql.NewConfig()
-		cfg.User = options.User
-		cfg.Passwd = options.Password
+		cfg.User = o.User
+		cfg.Passwd = o.Password
 		cfg.Net = "tcp"
 		cfg.Addr = fmt.Sprintf("%s:%d", dbHost, dbPort)
-		cfg.DBName = options.Database
+		cfg.DBName = o.Database
 		connData.ConnString = cfg.FormatDSN()
-		connData.ConnDescription = fmt.Sprintf("mysql://%s:@%s:%d/%s?charset=utf8", options.User, options.Host, options.Port, options.Database)
+		connData.ConnDescription = fmt.Sprintf("mysql://%s:@%s:%d/%s?charset=utf8", o.User, o.Host, o.Port, o.Database)
 		break
 	case EngineOracle:
 		connData.Driver = "godror"
-		if "" != options.ServiceID {
-			connData.ConnString = fmt.Sprintf("%s/%s@%s:%d:%s", utils.URLEncode(options.User), utils.URLEncode(options.Password), dbHost, dbPort, options.ServiceID)
+		if "" != o.ServiceID {
+			connData.ConnString = fmt.Sprintf("%s/%s@%s:%d:%s", utils.URLEncode(o.User), utils.URLEncode(o.Password), dbHost, dbPort, o.ServiceID)
 		} else {
-			connData.ConnString = fmt.Sprintf("%s/%s@%s:%d/%s", utils.URLEncode(options.User), utils.URLEncode(options.Password), dbHost, dbPort, options.ServiceName)
+			connData.ConnString = fmt.Sprintf("%s/%s@%s:%d/%s", utils.URLEncode(o.User), utils.URLEncode(o.Password), dbHost, dbPort, o.ServiceName)
 		}
-		if "" != options.Database {
-			connData.ConnString = connData.ConnString + "/" + options.Database
+		if "" != o.Database {
+			connData.ConnString = connData.ConnString + "/" + o.Database
 		}
 		connData.ConnDescription = connData.ConnString
 		break
 	case EnginePostgres, EngineCockroachDB:
 		connData.Driver = "postgres"
-		connData.ConnString = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s", dbHost, dbPort, options.User, options.Password, options.Database)
-		connData.ConnDescription = fmt.Sprintf("postgres://%s:@%s:%d/%s", options.User, options.Host, options.Port, options.Database)
+		connData.ConnString = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s", dbHost, dbPort, o.User, o.Password, o.Database)
+		connData.ConnDescription = fmt.Sprintf("postgres://%s:@%s:%d/%s", o.User, o.Host, o.Port, o.Database)
 		break
 	case EngineSQLite:
 		connData.Driver = "sqlite3"
-		connData.ConnString = options.Host
-		connData.ConnDescription = options.Host
+		connData.ConnString = o.Host
+		connData.ConnDescription = o.Host
 		break
 	default:
-		logger.Error.Printf("Unsupported database engine: %d", options.Engine)
+		logger.Error.Printf("Unsupported database engine: %d", o.Engine)
 		// p.cleanSSHTunnel()
 		return connData, errors.New("Unsupported database engine")
 	}
-	return connData, nil
+	return connData, err
+}
+
+// Cleanup clean sshtunnel
+func (o *DBConnectionPoolOptions) Cleanup() {
+	o.cleanSSHTunnel()
+}
+
+func (o *DBConnectionPoolOptions) ensureSSHTunnel() (string, int, error) {
+	dbHost := o.Host
+	dbPort := o.Port
+	if "" != o.SSHTunnelDSN {
+		sshTunnel, err := sshtunnel.NewSSHTunnel(o.SSHTunnelDSN, o.Host, o.Port)
+		if nil != err {
+			return dbHost, dbPort, err
+		}
+
+		err = sshTunnel.Start()
+		if nil != err {
+			logger.Error.Printf("Start SSH Tunnel failed with error:%v", err)
+			return dbHost, dbPort, fmt.Errorf("Start SSH Tunnel failed with error:%v", err)
+		}
+		o.sshTunnel = sshTunnel
+		dbHost = sshTunnel.LocalHost()
+		dbPort = sshTunnel.LocalPort()
+	}
+	return dbHost, dbPort, nil
+}
+
+func (o *DBConnectionPoolOptions) cleanSSHTunnel() {
+	if nil != o.sshTunnel {
+		o.sshTunnel.Stop()
+		o.sshTunnel = nil
+	}
 }
