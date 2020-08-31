@@ -29,9 +29,8 @@ func (n *Proxies) Valid() bool {
 func (n *Proxies) FetchProxyURL(endpointURL string) string {
 	if strings.HasPrefix(endpointURL, "https") {
 		return n.HTTPS
-	} else {
-		return n.HTTP
 	}
+	return n.HTTP
 }
 
 // DBConnectorConfig db connector configuration

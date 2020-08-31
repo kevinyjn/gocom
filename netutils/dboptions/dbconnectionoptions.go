@@ -1,4 +1,4 @@
-package definations
+package dboptions
 
 import (
 	"errors"
@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	"github.com/kevinyjn/gocom/logger"
-	"github.com/kevinyjn/gocom/sshtunnel"
+	"github.com/kevinyjn/gocom/netutils/pinger"
+	"github.com/kevinyjn/gocom/netutils/sshtunnel"
 	"github.com/kevinyjn/gocom/utils"
 
 	// justifying
@@ -295,7 +296,7 @@ func (o *DBConnectionPoolOptions) Cleanup() {
 func (o *DBConnectionPoolOptions) ensureSSHTunnel() (string, int, error) {
 	dbHost := o.Host
 	dbPort := o.Port
-	if "" != o.SSHTunnelDSN {
+	if "" != o.SSHTunnelDSN && !pinger.Connectable(o.Host, o.Port) {
 		sshTunnel, err := sshtunnel.NewSSHTunnel(o.SSHTunnelDSN, o.Host, o.Port)
 		if nil != err {
 			return dbHost, dbPort, err
