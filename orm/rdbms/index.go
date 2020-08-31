@@ -10,6 +10,7 @@ import (
 
 	"github.com/kevinyjn/gocom/definations"
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/netutils/dboptions"
 	"github.com/kevinyjn/gocom/utils"
 	"github.com/kevinyjn/gocom/validator/validates"
 
@@ -66,7 +67,7 @@ func GetInstance() *DataAccessEngine {
 // Init db instance with config
 func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations.DBConnectorConfig) (*xorm.Engine, error) {
 	var err error
-	var connData definations.DBConnectionData
+	var connData dboptions.DBConnectionData
 	if nil == dbConfig || ("" == dbConfig.Driver || "" == dbConfig.Address) {
 		dan.mutex.RLock()
 		eng := dan.orms[dbDatasourceName]
@@ -88,7 +89,7 @@ func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 			Db:      DefaultDatabaseName,
 		}
 	}
-	opts := definations.NewDBConnectionPoolOptionsWithDSN(dbConfig.Address)
+	opts := dboptions.NewDBConnectionPoolOptionsWithDSN(dbConfig.Address)
 	if nil != opts {
 		connData, err = opts.GetConnectionData()
 		if nil != err {
