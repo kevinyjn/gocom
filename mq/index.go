@@ -36,8 +36,8 @@ func Init(mqConfigFile string, mqDriverConfigs map[string]mqenv.MQConnectorConfi
 // InitWithMQRoutes patitionally init with RoutesEnv
 func InitWithMQRoutes(mqRoutesEnv *RoutesEnv, mqDriverConfigs map[string]mqenv.MQConnectorConfig) error {
 	var lastErr error
-	for category, cnf := range mqEnv.MQs {
-		err = InitMQTopic(category, &cnf, mqDriverConfigs)
+	for category, cnf := range mqRoutesEnv.MQs {
+		err := InitMQTopic(category, &cnf, mqDriverConfigs)
 		if nil != err {
 			lastErr = err
 		}
