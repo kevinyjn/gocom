@@ -47,11 +47,11 @@ func NewRedisSession(name string, conf cachingenv.CacheConnectorConfig) (*RedisC
 
 	_, err := s.Client.Ping().Result()
 	if err != nil {
-		logger.Error.Printf("connect redis %s %s failed with error:%s", name, redisAddr, err.Error())
+		logger.Error.Printf("connect redis %s %s failed with error:%v", name, redisAddr, err)
 		go s.StartKeepalive()
 		return s, err
 	}
-	logger.Info.Printf("initialized redis connection %s %s on db:%d\n", name, redisAddr, conf.Index)
+	logger.Info.Printf("initialized redis connection %s %s on db:%d", name, redisAddr, conf.Index)
 	return s, nil
 }
 
@@ -102,7 +102,7 @@ func (s *RedisCacheSession) StartKeepalive() {
 func (s *RedisCacheSession) Get(key string) ([]byte, error) {
 	val, err := s.Client.Get(key).Bytes()
 	if nil != err {
-		logger.Warning.Printf("get %s failed with error:%s", key, err.Error())
+		logger.Warning.Printf("get %s failed with error:%v", key, err)
 		return nil, err
 	}
 	return val, err
@@ -112,7 +112,7 @@ func (s *RedisCacheSession) Get(key string) ([]byte, error) {
 func (s *RedisCacheSession) Set(key string, value []byte, expire time.Duration) bool {
 	err := s.Client.Set(key, value, expire).Err()
 	if nil != err {
-		logger.Error.Printf("set %s failed with error:%s", key, err.Error())
+		logger.Error.Printf("set %s failed with error:%v", key, err)
 		return false
 	}
 	return true

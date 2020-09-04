@@ -83,7 +83,7 @@ func InitMongoDB(dbConfigs map[string]definations.DBConnectorConfig) error {
 		}
 		client, err := mongo.NewClient(cliOptions)
 		if err != nil {
-			logger.Error.Printf("Create mongodb client %s %s failed with error:%s", cnfname, cnf.Address, err.Error())
+			logger.Error.Printf("Create mongodb client %s %s failed with error:%v", cnfname, cnf.Address, err)
 			one.LastError = err
 			return err
 		}
@@ -128,7 +128,7 @@ func (s *MongoSession) StartKeepAlive() {
 			s.lastPingTime = curTs
 			err := s.Ping()
 			if err != nil {
-				logger.Error.Printf("Mongodb:%s %s ping failed with error:%s, reconnecting...", s.Name, s.Database, err.Error())
+				logger.Error.Printf("Mongodb:%s %s ping failed with error:%v, reconnecting...", s.Name, s.Database, err)
 				s.LastError = err
 				s.connect()
 			}
@@ -228,7 +228,7 @@ func (s *MongoSession) QueryFind(model interface{}, filter interface{}, limit in
 		row := newMongoModel(model)
 		err := cur.Decode(row)
 		if err != nil {
-			logger.Error.Printf("%s", err.Error())
+			logger.Error.Printf("MongoDB QueryFind decode row data failed with error:%v", err)
 			continue
 		}
 		num++
@@ -238,7 +238,7 @@ func (s *MongoSession) QueryFind(model interface{}, filter interface{}, limit in
 		// rows = append(rows, row)
 	}
 	if err := cur.Err(); err != nil {
-		logger.Error.Printf("%s", err.Error())
+		logger.Error.Printf("MongoDB QueryFind read records failed with error:%v", err)
 	}
 	reflect.ValueOf(results).Elem().Set(resultsValue)
 	// results = resultsValue.Interface()
@@ -302,7 +302,7 @@ func (s *MongoSession) FindOne(dst interface{}, filter interface{}, opts ...*opt
 	defer cancel()
 	err := collection.FindOne(ctx, filter, opts...).Decode(dst)
 	if err != nil {
-		// logger.Error.Printf("Query mongodb collection:%s failed with error:%s", collectionName, err.Error())
+		// logger.Error.Printf("Query mongodb collection:%s failed with error:%v", collectionName, err)
 		return err
 	}
 	return nil
@@ -331,7 +331,7 @@ func (s *MongoSession) SaveOne(dst interface{}, isInsert bool) error {
 
 		res, err := collection.InsertOne(ctx, dst)
 		if err != nil {
-			logger.Error.Printf("Save mongodb document by collection:%s failed with error:%s", collectionName, err.Error())
+			logger.Error.Printf("Save mongodb document by collection:%s failed with error:%v", collectionName, err)
 			return err
 		}
 		if fieldMKey.IsValid() && (fieldMKey.Type() == reflect.TypeOf(res.InsertedID)) {
@@ -345,7 +345,7 @@ func (s *MongoSession) SaveOne(dst interface{}, isInsert bool) error {
 		filter := bson.M{"_id": key}
 		_, err := collection.UpdateOne(ctx, filter, updates)
 		if err != nil {
-			logger.Error.Printf("Save mongodb document by collection:%s failed with error:%s", collectionName, err.Error())
+			logger.Error.Printf("Save mongodb document by collection:%s failed with error:%v", collectionName, err)
 			return err
 		}
 		return nil
@@ -369,7 +369,7 @@ func (s *MongoSession) DeleteOne(dst interface{}, isInsert bool) error {
 	filter := bson.M{"_id": key}
 	_, err := collection.DeleteOne(ctx, filter)
 	if err != nil {
-		logger.Error.Printf("Delete mongodb document by collection:%s failed with error:%s", collectionName, err.Error())
+		logger.Error.Printf("Delete mongodb document by collection:%s failed with error:%v", collectionName, err)
 		return err
 	}
 	return nil
@@ -386,7 +386,7 @@ func (s *MongoSession) MongoDBInsertMany(collectionName string, docs []interface
 	defer cancel()
 	_, err := collection.InsertMany(ctx, docs)
 	if err != nil {
-		logger.Fatal.Printf("Insert objects failed with error:%s", err.Error())
+		logger.Fatal.Printf("Insert objects failed with error:%v", err)
 		return false
 	}
 
@@ -432,13 +432,13 @@ func (s *MongoSession) QueryMaxID(model interface{}, result interface{}, aggFiel
 	cur, err := collection.Aggregate(ctx, pipeline, opts)
 	defer cur.Close(ctx)
 	if err != nil {
-		logger.Error.Printf("Query max id of collection:%s failed with error:%s", collectionName, err.Error())
+		logger.Error.Printf("Query max id of collection:%s failed with error:%v", collectionName, err)
 		return err
 	}
 	for cur.Next(ctx) {
 		err = cur.Decode(&aggResult)
 		if err != nil {
-			logger.Error.Printf("Query max id of collection:%s while decode result failed with error:%s", collectionName, err.Error())
+			logger.Error.Printf("Query max id of collection:%s while decode result failed with error:%v", collectionName, err)
 			return err
 		}
 		value.Set(reflect.ValueOf(aggResult.Value))

@@ -35,7 +35,7 @@ func NewResultObjectWithRequestSn(requestSn interface{}) ResultObject {
 func (r *ResultObject) Encode() string {
 	buf, err := json.Marshal(r)
 	if err != nil {
-		logger.Error.Printf("Serialize result object failed with error:%s", err.Error())
+		logger.Error.Printf("Serialize result object failed with error:%v", err)
 		return err.Error()
 	}
 	return string(buf)

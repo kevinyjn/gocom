@@ -69,7 +69,7 @@ func createChannel(c *amqp.Connection, amqpCfg *AMQPConfig) (*amqp.Channel, erro
 	logger.Info.Printf("got Connection, getting Channel")
 	channel, err := c.Channel()
 	if err != nil {
-		logger.Error.Printf("Channel: %s", err.Error())
+		logger.Error.Printf("Channel create failed with error: %v", err)
 		return nil, err
 	}
 
@@ -85,7 +85,7 @@ func createChannel(c *amqp.Connection, amqpCfg *AMQPConfig) (*amqp.Channel, erro
 			nil,                  // arguments
 		); err != nil {
 			channel.Close()
-			logger.Error.Printf("Exchange Declare: %s", err.Error())
+			logger.Error.Printf("Exchange Declare: %v", err)
 			return nil, err
 		}
 	}
@@ -111,8 +111,8 @@ func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error
 		nil,        // arguments
 	)
 	if err != nil {
-		logger.Error.Printf("Queue declare: %s", err.Error())
-		return nil, fmt.Errorf("Queue Declare: %s", err.Error())
+		logger.Error.Printf("Queue declare: %v", err)
+		return nil, fmt.Errorf("Queue Declare: %v", err)
 	}
 
 	logger.Info.Printf("declared Queue (%q %d messages, %d consumers), binding to Exchange (key %q)",
@@ -126,8 +126,8 @@ func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error
 			false,                // noWait
 			nil,                  // arguments
 		); err != nil {
-			logger.Error.Printf("Queue bind: %s", err.Error())
-			return nil, fmt.Errorf("Queue Bind: %s", err.Error())
+			logger.Error.Printf("Queue bind: %v", err)
+			return nil, fmt.Errorf("Queue Bind: %v", err)
 		}
 	}
 	return &queue, nil
@@ -157,10 +157,10 @@ func (r *RabbitMQ) Run() {
 			// backstop
 			if r.Conn != nil && !r.Conn.IsClosed() {
 				if err := r.Channel.Cancel("", true); err != nil {
-					logger.Error.Printf("RabbitMQ %s cancel channel failed with error:%s", r.Name, err.Error())
+					logger.Error.Printf("RabbitMQ %s cancel channel failed with error:%v", r.Name, err)
 				}
 				if err := r.Conn.Close(); err != nil {
-					logger.Error.Printf("RabbitMQ %s close connection failed with error:%s", r.Name, err.Error())
+					logger.Error.Printf("RabbitMQ %s close connection failed with error:%v", r.Name, err)
 				}
 			}
 
@@ -286,7 +286,7 @@ func (r *RabbitMQ) initConn() error {
 					if err != nil {
 						conn.Close()
 						r.Conn = nil
-						logger.Fatal.Printf("create channel failed with error:%s", err.Error())
+						logger.Fatal.Printf("create channel failed with error:%v", err)
 						return
 					}
 					if r.Config.IsBroadcastExange() && len(r.consumers) <= 0 && len(r.pendingConsumers) <= 0 {
@@ -311,7 +311,7 @@ func (r *RabbitMQ) ensureQueue() error {
 	if err != nil {
 		r.Conn.Close()
 		r.Conn = nil
-		logger.Fatal.Printf("create queue:%s failed with error:%s", r.Config.Queue, err.Error())
+		logger.Fatal.Printf("create queue:%s failed with error:%v", r.Config.Queue, err)
 		return err
 	}
 	r.queue = queue
@@ -418,7 +418,7 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 		cm.Arguments,   // arguments
 	)
 	if err != nil {
-		logger.Error.Printf("consuming queue:%s failed with error:%s", cm.Queue, err.Error())
+		logger.Error.Printf("consuming queue:%s failed with error:%v", cm.Queue, err)
 		return err
 	}
 	logger.Info.Printf("Consuming mq with queue:%s ...", cm.Queue)
@@ -428,12 +428,14 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 
 func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliveries <-chan amqp.Delivery) {
 	for d := range deliveries {
-		logger.Trace.Printf(
-			"got %dB delivery: [%v] %s",
-			len(d.Body),
-			d.DeliveryTag,
-			d.Body,
-		)
+		if logger.IsDebugEnabled() {
+			logger.Trace.Printf(
+				"got %dB delivery: [%v] %s",
+				len(d.Body),
+				d.DeliveryTag,
+				d.Body,
+			)
+		}
 		// fmt.Println("---- got delivery message d:", d)
 		go handleConsumeCallback(d, cb, autoAck)
 	}

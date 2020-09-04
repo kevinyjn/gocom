@@ -10,7 +10,7 @@ const (
 	// AMQPReconnectDuration reconnect duration
 	AMQPReconnectDuration = 1
 	// AMQPQueueStatusFreshDuration queue status refresh duration
-	AMQPQueueStatusFreshDuration = 60
+	AMQPQueueStatusFreshDuration = 30
 )
 
 // AMQPConfig queue config
@@ -21,14 +21,6 @@ type AMQPConfig struct {
 	ExchangeName    string
 	ExchangeType    string
 	BindingKey      string
-}
-
-// RabbitRPCMsgProxy rpc proxy
-type RabbitRPCMsgProxy struct {
-	Request          string
-	Response         chan string
-	ReplyToQueue     string
-	callbackDisabled bool
 }
 
 // RabbitConsumerProxy consumer proxy
@@ -90,7 +82,8 @@ type RabbitMQ struct {
 // RabbitRPCMQ rpc instance
 type RabbitRPCMQ struct {
 	Name        string
-	Publish     chan *RabbitRPCMsgProxy
+	Publish     chan *mqenv.MQPublishMessage
+	Consume     chan *RabbitConsumerProxy
 	Deliveries  <-chan amqp.Delivery
 	Done        chan error
 	Channel     *amqp.Channel
@@ -101,9 +94,14 @@ type RabbitRPCMQ struct {
 	Close       chan interface{}
 	RPCType     int
 
-	connClosed    chan *amqp.Error
-	channelClosed chan *amqp.Error
-	connecting    bool
+	connClosed       chan *amqp.Error
+	channelClosed    chan *amqp.Error
+	consumers        []*RabbitConsumerProxy
+	pendingConsumers []*RabbitConsumerProxy
+	pendingPublishes []*mqenv.MQPublishMessage
+	connecting       bool
+	queueName        string
+	queue            *amqp.Queue
 }
 
 // Equals check if equals
@@ -119,9 +117,4 @@ func (me *AMQPConfig) Equals(to *AMQPConfig) bool {
 // IsBroadcastExange check if the configure is fanout
 func (me *AMQPConfig) IsBroadcastExange() bool {
 	return "fanout" == me.ExchangeType
-}
-
-// OnClosed on close event
-func (m *RabbitRPCMsgProxy) OnClosed() {
-	m.callbackDisabled = true
 }

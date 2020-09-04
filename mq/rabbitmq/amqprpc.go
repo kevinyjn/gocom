@@ -13,7 +13,7 @@ import (
 
 var amqpRpcs = map[string]*RabbitRPCMQ{}
 
-var cbs = make(map[string]*RabbitRPCMsgProxy)
+var _cbs = make(map[string]*mqenv.MQPublishMessage)
 
 // InitRPCRabbitMQ init
 func InitRPCRabbitMQ(key string, rpcType int, connCfg *mqenv.MQConnectorConfig, amqpCfg *AMQPConfig) *RabbitRPCMQ {
@@ -44,11 +44,11 @@ func GetRPCRabbitMQ(key string) *RabbitRPCMQ {
 		return nil
 	}
 	if r.Channel == nil || r.QueueStatus.RefreshingTime == 0 {
-		logger.Warning.Printf("Get rabbit mq rpc publisher by appid:%s while the publisher channel were not connected.", key)
+		logger.Warning.Printf("Get rabbit mq rpc publisher by key:%s while the publisher channel were not connected.", key)
 		return nil
 	}
 	now := time.Now().Unix()
-	if now-r.QueueStatus.RefreshingTime > AMQPQueueStatusFreshDuration {
+	if (r.QueueStatus.Consumers < 1 && now-r.QueueStatus.RefreshingTime > 1) || now-r.QueueStatus.RefreshingTime > AMQPQueueStatusFreshDuration {
 		qs, err := r.Channel.QueueInspect(r.QueueStatus.QueueName)
 		if err != nil {
 			logger.Warning.Printf("Could not get rabbit mq queue status by queue name:%s", r.QueueStatus.QueueName)
@@ -59,7 +59,16 @@ func GetRPCRabbitMQ(key string) *RabbitRPCMQ {
 		r.QueueStatus.RefreshingTime = now
 	}
 	if r.QueueStatus.Consumers < 1 {
-		logger.Warning.Printf("Get rabbit mq rpc publisher by appid:%s while there is no consumers on publisher queue.", key)
+		logger.Warning.Printf("Get rabbit mq rpc publisher by key:%s while there is no consumers on publisher queue.", key)
+		return nil
+	}
+	return r
+}
+
+// GetRPCRabbitMQWithoutConnectedChecking get instance
+func GetRPCRabbitMQWithoutConnectedChecking(key string) *RabbitRPCMQ {
+	r, exists := amqpRpcs[key]
+	if !exists {
 		return nil
 	}
 	return r
@@ -68,7 +77,8 @@ func GetRPCRabbitMQ(key string) *RabbitRPCMQ {
 func generateRPCRabbitMQInstance(name string, rpcType int, connCfg *mqenv.MQConnectorConfig, amqpCfg *AMQPConfig) *RabbitRPCMQ {
 	r := &RabbitRPCMQ{
 		Name:       name,
-		Publish:    make(chan *RabbitRPCMsgProxy),
+		Publish:    make(chan *mqenv.MQPublishMessage),
+		Consume:    make(chan *RabbitConsumerProxy),
 		Done:       make(chan error),
 		Close:      make(chan interface{}),
 		Config:     amqpCfg,
@@ -78,7 +88,10 @@ func generateRPCRabbitMQInstance(name string, rpcType int, connCfg *mqenv.MQConn
 			QueueName:      amqpCfg.Queue,
 			RefreshingTime: 0,
 		},
-		connecting: false,
+		consumers:        make([]*RabbitConsumerProxy, 0),
+		pendingConsumers: make([]*RabbitConsumerProxy, 0),
+		pendingPublishes: make([]*mqenv.MQPublishMessage, 0),
+		connecting:       false,
 	}
 	go r.Run()
 	return r
@@ -101,17 +114,27 @@ func getDeliveriesChannel(channel *amqp.Channel, queueName string) (<-chan amqp.
 // 2. expect messages from the message hub on the Publish channel
 // 3. if the connection is closed, try to restart it
 func (r *RabbitRPCMQ) Run() {
+	tick := time.NewTicker(time.Second * 2)
 	for {
 		if r.connecting == false && r.Conn == nil {
+			if len(r.consumers) > 0 {
+				if nil == r.pendingConsumers {
+					r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
+				}
+				for _, cm := range r.consumers {
+					r.pendingConsumers = append(r.pendingConsumers, cm)
+				}
+				r.consumers = make([]*RabbitConsumerProxy, 0)
+			}
 			r.initConn()
 			logger.Trace.Printf("amqprpc %s pre running...", r.Name)
 			// backstop
 			if r.Conn != nil && !r.Conn.IsClosed() {
 				if err := r.Channel.Cancel("", true); err != nil {
-					logger.Error.Printf("RabbitMQ %s cancel channel failed with error:%s", r.Name, err.Error())
+					logger.Error.Printf("RabbitMQ %s cancel channel failed with error:%v", r.Name, err)
 				}
 				if err := r.Conn.Close(); err != nil {
-					logger.Error.Printf("RabbitMQ %s close connection failed with error:%s", r.Name, err.Error())
+					logger.Error.Printf("RabbitMQ %s close connection failed with error:%v", r.Name, err)
 				}
 			}
 
@@ -131,32 +154,89 @@ func (r *RabbitRPCMQ) Run() {
 
 		select {
 		case pm := <-r.Publish:
-			logger.Trace.Printf("publish message: %s\n", pm.Request)
+			if logger.IsDebugEnabled() {
+				logger.Trace.Printf("publish message: %s", string(pm.Body))
+			}
 			r.publish(pm)
+		case cm := <-r.Consume:
+			if "" != r.queueName {
+				cm.Queue = r.queueName
+			}
+			logger.Info.Printf("consuming queue: %s\n", cm.Queue)
+			r.consume(cm)
 		case err := <-r.Done:
-			logger.Error.Printf("RabbitMQ connection:%s done with error:%s", r.Name, err.Error())
-			r.close()
+			logger.Error.Printf("RabbitMQ connection:%s done with error:%v", r.Name, err)
+			if r.connecting == false {
+				r.queueName = ""
+				r.queue = nil
+				r.close()
+				break
+			}
 		case err := <-r.connClosed:
-			logger.Error.Printf("RabbitMQ connection:%s closed with error:%s", r.Name, err.Error())
-			r.close()
+			logger.Error.Printf("RabbitMQ connection:%s closed with error:%v", r.Name, err)
+			r.queueName = ""
+			r.queue = nil
+			r.clearNotifyChan()
+			r.Conn = nil
+			r.Channel = nil
 		case err := <-r.channelClosed:
-			logger.Error.Printf("RabbitMQ channel:%s closed with error:%s", r.Name, err.Error())
+			logger.Error.Printf("RabbitMQ channel:%s closed with error:%v", r.Name, err)
+			r.queueName = ""
+			r.queue = nil
+			r.Channel = nil
 			r.close()
 		case <-r.Close:
+			r.queueName = ""
+			r.queue = nil
 			r.Channel.Close()
+			tick.Stop()
 			return
+		case <-tick.C:
+			// fmt.Println("amqp tick...")
+			if nil == r.Conn {
+				break
+			}
+			if r.Conn.IsClosed() {
+				r.Conn = nil
+				r.queue = nil
+				r.queueName = ""
+				logger.Error.Printf("RabbitMQ connection:%s were closed on ticker checking", r.Name)
+				break
+			} else if nil == r.Channel {
+				logger.Warning.Printf("RabbitMQ channel:%s were nil", r.Name)
+			} else {
+				//
+			}
 		}
+	}
+}
+
+func (r *RabbitRPCMQ) clearNotifyChan() {
+	if r.channelClosed != nil {
+		for err := range r.channelClosed {
+			println(err)
+		}
+		r.channelClosed = nil
+	}
+	if r.connClosed != nil {
+		for err := range r.connClosed {
+			println(err)
+		}
+		r.connClosed = nil
 	}
 }
 
 func (r *RabbitRPCMQ) close() {
 	r.connecting = false
+	r.clearNotifyChan()
 	if r.Channel != nil {
 		r.Channel.Close()
+		r.Channel = nil
 	}
-	if r.Conn != nil {
+	if r.Conn != nil && !r.Conn.IsClosed() {
 		r.Conn.Close()
 	}
+	r.Conn = nil
 }
 
 // try to start a new connection, channel and deliveries channel. if failed, try again in 5 sec.
@@ -168,11 +248,10 @@ func (r *RabbitRPCMQ) initConn() {
 	}
 
 	r.connecting = true
-	ticker := time.NewTicker(AMQPReconnectDuration * time.Second)
-	quitTiker := make(chan struct{})
 	amqpAddr := fmt.Sprintf("amqp://%s:%s@%s:%d/%s", cnf.User, cnf.Password, cnf.Host, cnf.Port, cnf.Path)
 
 	go func() {
+		ticker := time.NewTicker(AMQPReconnectDuration * time.Second)
 		for {
 			select {
 			case <-ticker.C:
@@ -182,40 +261,124 @@ func (r *RabbitRPCMQ) initConn() {
 					logger.Error.Println("node will only be able to respond to local connections")
 					logger.Error.Println("trying to reconnect in 5 seconds...")
 				} else {
+					logger.Info.Printf("Connecting amqp:%s:%d/%s by user:%s succeed", cnf.Host, cnf.Port, cnf.Path, cnf.User)
 					r.connecting = false
 					r.Conn = conn
-					close(quitTiker)
+					ticker.Stop()
 					r.Channel, err = createChannel(conn, r.Config)
 					if err != nil {
 						conn.Close()
 						r.Conn = nil
-						logger.Fatal.Printf("create channel failed with error:%s", err.Error())
+						logger.Fatal.Printf("create channel failed with error:%v", err)
 						return
 					}
-					qs, err := createQueue(r.Channel, r.Config)
-					if err != nil {
-						conn.Close()
-						r.Conn = nil
-						logger.Fatal.Printf("create queue:%s failed with error:%s", r.Config.Queue, err.Error())
-						return
+					if r.Config.IsBroadcastExange() && len(r.consumers) <= 0 && len(r.pendingConsumers) <= 0 {
+						break
 					}
-					r.QueueStatus.QueueName = qs.Name
-					r.QueueStatus.Consumers = qs.Consumers
-					r.QueueStatus.Messages = qs.Messages
-					r.QueueStatus.RefreshingTime = time.Now().Unix()
-					r.connClosed = conn.NotifyClose(make(chan *amqp.Error))
-					r.channelClosed = r.Channel.NotifyClose(make(chan *amqp.Error))
-					if mqenv.MQTypeConsumer == r.RPCType {
-						r.Deliveries, _ = getDeliveriesChannel(r.Channel, r.Config.Queue)
-						go handleConsume(r.Deliveries, r.Done)
+					err = r.ensureQueue()
+					if nil != err {
+						return
 					}
 				}
-			case <-quitTiker:
-				ticker.Stop()
-				return
 			}
 		}
 	}()
+}
+
+func (r *RabbitRPCMQ) ensureQueue() error {
+	if nil == r.Conn {
+		return fmt.Errorf("RabbitMQ connection were not connected when ensuring queue:%s", r.Config.Queue)
+	}
+
+	queue, err := createQueue(r.Channel, r.Config)
+	if err != nil {
+		r.Conn.Close()
+		r.Conn = nil
+		logger.Fatal.Printf("create queue:%s failed with error:%v", r.Config.Queue, err)
+		return err
+	}
+	r.QueueStatus.QueueName = queue.Name
+	r.QueueStatus.Consumers = queue.Consumers
+	r.QueueStatus.Messages = queue.Messages
+	r.QueueStatus.RefreshingTime = time.Now().Unix()
+	r.queue = queue
+	r.queueName = queue.Name
+	r.connClosed = r.Conn.NotifyClose(make(chan *amqp.Error))
+	r.channelClosed = r.Channel.NotifyClose(make(chan *amqp.Error))
+	if mqenv.MQTypeConsumer == r.RPCType {
+		logger.Info.Printf("consuming RPC messages...")
+		r.Deliveries, _ = getDeliveriesChannel(r.Channel, r.Config.Queue)
+		go handleConsume(r.Deliveries, r.Done)
+	} else {
+		if r.pendingConsumers != nil && len(r.pendingConsumers) > 0 {
+			consumers := r.pendingConsumers
+			r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
+			for _, cm := range consumers {
+				cm.Queue = queue.Name
+				r.consume(cm)
+			}
+		}
+		if r.pendingPublishes != nil && len(r.pendingPublishes) > 0 {
+			publishes := r.pendingPublishes
+			r.pendingPublishes = make([]*mqenv.MQPublishMessage, 0)
+			for _, pm := range publishes {
+				r.publish(pm)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *RabbitRPCMQ) consume(cm *RabbitConsumerProxy) error {
+	if r.Channel == nil {
+		logger.Warning.Printf("Consuming queue:%s failed while the channel not ready, pending.", cm.Queue)
+		r.pendingConsumers = append(r.pendingConsumers, cm)
+		return nil
+	}
+	if nil == r.queue {
+		err := r.ensureQueue()
+		if nil != err {
+			return err
+		}
+	}
+	if nil == r.consumers {
+		r.consumers = make([]*RabbitConsumerProxy, 0)
+	}
+	r.consumers = append(r.consumers, cm)
+
+	deliveries, err := r.Channel.Consume(
+		cm.Queue,       // name
+		cm.ConsumerTag, // consumerTag,
+		false,          // noAck
+		cm.Exclusive,   // exclusive
+		cm.NoLocal,     // noLocal
+		cm.NoWait,      // noWait
+		cm.Arguments,   // arguments
+	)
+	if err != nil {
+		logger.Error.Printf("consuming queue:%s failed with error:%v", cm.Queue, err)
+		return err
+	}
+	logger.Info.Printf("Now consuming mq with queue:%s ...", cm.Queue)
+	go r.handleConsumes(cm.Callback, cm.AutoAck, deliveries)
+	return nil
+}
+
+func (r *RabbitRPCMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliveries <-chan amqp.Delivery) {
+	for d := range deliveries {
+		if logger.IsDebugEnabled() {
+			logger.Trace.Printf(
+				"got %dB delivery: [%v] %s",
+				len(d.Body),
+				d.DeliveryTag,
+				d.Body,
+			)
+		}
+		// fmt.Println("---- got delivery message d:", d)
+		go handleConsumeCallback(d, cb, autoAck)
+	}
+	r.Done <- fmt.Errorf("error: deliveries channel closed")
 }
 
 func genCorrelationID() string {
@@ -232,35 +395,66 @@ func randInt(min int, max int) int {
 	return min + rand.Intn(max-min)
 }
 
-func (r *RabbitRPCMQ) publish(pm *RabbitRPCMsgProxy) error {
+func (r *RabbitRPCMQ) publish(pm *mqenv.MQPublishMessage) error {
 	// body, _ := json.Marshal(pm)
-	c := r.Channel
-	body := pm.Request
-	logger.Trace.Printf("publishing %dB body (%s)", len(body), body)
-	if c == nil {
+	if r.Channel == nil {
+		logger.Warning.Printf("publishing to rabbitmq while connection not ready yet, with %dB body (%s)", len(pm.Body), pm.Body)
 		return fmt.Errorf("connection to rabbitmq might not be ready yet")
 	}
-	correlationID := genCorrelationID()
+	if nil == r.queue && !r.Config.IsBroadcastExange() {
+		err := r.ensureQueue()
+		if nil != err {
+			return err
+		}
+	}
 
-	cbs[correlationID] = pm
+	if "" == pm.CorrelationID {
+		pm.CorrelationID = genCorrelationID()
+	}
+	originPm, _ := _cbs[pm.CorrelationID]
+	if nil == originPm || originPm.Response == nil {
+		_cbs[pm.CorrelationID] = pm
+	}
 
-	if err := c.Publish(
+	if logger.IsDebugEnabled() {
+		fmt.Printf("====> caching publish message inst %s %+v\n", pm.Body, pm)
+		logger.Trace.Printf("publishing %s with %dB body (%s)", pm.CorrelationID, len(pm.Body), pm.Body)
+	}
+
+	headers := amqp.Table{}
+	for k, v := range pm.Headers {
+		headers[k] = v
+	}
+	err := r.Channel.Publish(
 		"",             // publish to an exchange
 		r.Config.Queue, // routing to 0 or more queues
 		false,          // mandatory
 		false,          // immediate
 		amqp.Publishing{
-			Headers:         amqp.Table{},
+			Headers:         headers,
 			ContentType:     "application/json",
 			ContentEncoding: "",
-			CorrelationId:   correlationID,
-			ReplyTo:         pm.ReplyToQueue,
-			Body:            []byte(body),
+			CorrelationId:   pm.CorrelationID,
+			ReplyTo:         pm.ReplyTo,
+			Body:            pm.Body,
 			DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
 			Priority:        0,              // 0-9
 			// a bunch of application/implementation-specific fields
 		},
-	); err != nil {
+	)
+	if nil != pm.PublishStatus {
+		status := mqenv.MQEvent{
+			Code:    mqenv.MQEventCodeOk,
+			Label:   pm.EventLabel,
+			Message: "Publish success",
+		}
+		if nil != err {
+			status.Code = mqenv.MQEventCodeFailed
+			status.Message = err.Error()
+		}
+		pm.PublishStatus <- status
+	}
+	if err != nil {
 		return fmt.Errorf("Exchange Publish: %s", err)
 	}
 	return nil
@@ -269,22 +463,25 @@ func (r *RabbitRPCMQ) publish(pm *RabbitRPCMsgProxy) error {
 func handleConsume(deliveries <-chan amqp.Delivery, done chan error) {
 	logger.Info.Println("waiting for rabbitmq deliveries...")
 	for d := range deliveries {
-		s := string(d.Body)
-		logger.Trace.Printf(
-			"got %dB delivery: [%v] %s",
-			len(s),
-			d.DeliveryTag,
-			s,
-		)
+		body := d.Body
+		if logger.IsDebugEnabled() {
+			logger.Trace.Printf(
+				"got %dB delivery: [%v] [%s] %s",
+				len(body),
+				d.DeliveryTag,
+				d.CorrelationId,
+				string(body),
+			)
+		}
 		// fmt.Println("---- got delivery message d:", d)
 		correlationID := d.CorrelationId
-		pm, pmExists := cbs[correlationID]
+		pm, pmExists := _cbs[correlationID]
 		if pmExists {
-			// fmt.Println("==== push back response data ", s)
-			if !pm.callbackDisabled {
-				pm.Response <- s
+			if pm.CallbackEnabled() {
+				fmt.Printf("====> push back response data %s %+v\n", correlationID, pm)
+				pm.Response <- body
 			}
-			delete(cbs, correlationID)
+			delete(_cbs, correlationID)
 			d.Ack(false)
 		} else {
 			// detect if the message is old data, if the message is old data and belongs to myself, acknowledge the message

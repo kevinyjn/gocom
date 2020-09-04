@@ -10,6 +10,7 @@ const (
 
 	MQEventCodeOk     = 0
 	MQEventCodeFailed = -1
+	MQEventCodeClosed = -9
 )
 
 // MQEvent event
@@ -45,13 +46,15 @@ type MQConsumerMessage struct {
 
 // MQPublishMessage publish message
 type MQPublishMessage struct {
-	Body          []byte            `json:"body"`
-	RoutingKey    string            `json:"routingKey"`
-	CorrelationID string            `json:"correlationId"`
-	ReplyTo       string            `json:"replyTo"`
-	PublishStatus chan MQEvent      `json:"-"`
-	EventLabel    string            `json:"eventLabel"`
-	Headers       map[string]string `json:"headers"`
+	Body             []byte            `json:"body"`
+	RoutingKey       string            `json:"routingKey"`
+	CorrelationID    string            `json:"correlationId"`
+	ReplyTo          string            `json:"replyTo"`
+	PublishStatus    chan MQEvent      `json:"-"`
+	EventLabel       string            `json:"eventLabel"`
+	Headers          map[string]string `json:"headers"`
+	Response         chan []byte
+	callbackDisabled bool
 }
 
 // MQConsumerCallback callback
@@ -66,4 +69,14 @@ type MQConsumerProxy struct {
 	Exclusive   bool
 	NoLocal     bool
 	NoWait      bool
+}
+
+// OnClosed on close event
+func (m *MQPublishMessage) OnClosed() {
+	m.callbackDisabled = true
+}
+
+// CallbackEnabled is callback enabled
+func (m *MQPublishMessage) CallbackEnabled() bool {
+	return false == m.callbackDisabled
 }

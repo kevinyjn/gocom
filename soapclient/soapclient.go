@@ -143,14 +143,14 @@ func NewSOAPClient(endpoint string, options ...ClientOption) (*SOAPClient, error
 	if opts.tlsOptions != nil && opts.tlsOptions.Enabled {
 		certs, err := tls.LoadX509KeyPair(opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile)
 		if err != nil {
-			logger.Error.Printf("Load tls certificates:%s and %s failed with error:%s", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile, err.Error())
+			logger.Error.Printf("Load tls certificates:%s and %s failed with error:%v", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile, err)
 			return nil, err
 		}
 
 		if opts.tlsOptions.CaFile != "" {
 			caData, err := ioutil.ReadFile(opts.tlsOptions.CaFile)
 			if err != nil {
-				logger.Error.Printf("Load tls root CA:%s failed with error:%s", opts.tlsOptions.CaFile, err.Error())
+				logger.Error.Printf("Load tls root CA:%s failed with error:%v", opts.tlsOptions.CaFile, err)
 				return nil, err
 			}
 			caPool := x509.NewCertPool()
@@ -189,14 +189,14 @@ func NewSOAPClient(endpoint string, options ...ClientOption) (*SOAPClient, error
 func (c *SOAPClient) Init() error {
 	wsdlResp, err := c.client.Get(c.endpoint)
 	if err != nil {
-		logger.Error.Printf("Get wsdl by endpoint:%s failed with error:%s", c.endpoint, err.Error())
+		logger.Error.Printf("Get wsdl by endpoint:%s failed with error:%v", c.endpoint, err)
 		return err
 	}
 	defer wsdlResp.Body.Close()
 
 	wsdlBody, err := ioutil.ReadAll(wsdlResp.Body)
 	if err != nil {
-		logger.Error.Printf("Read wsdl by endpoint:%s body failed with error:%s", c.endpoint, err.Error())
+		logger.Error.Printf("Read wsdl by endpoint:%s body failed with error:%v", c.endpoint, err)
 		return err
 	}
 
@@ -205,7 +205,7 @@ func (c *SOAPClient) Init() error {
 
 	err = xml.Unmarshal(wsdlBody, &wsdl)
 	if err != nil {
-		logger.Error.Printf("Parse wsdl by endpoint:%s body failed with error:%s", c.endpoint, err.Error())
+		logger.Error.Printf("Parse wsdl by endpoint:%s body failed with error:%v", c.endpoint, err)
 		return err
 	}
 
@@ -307,7 +307,7 @@ func (p *SOAPPort) Call(operation string, response interface{}, soapBody interfa
 	evp := NewSOAPEnvelope(soapBody, soapHeaders)
 	bodyBuf, err := xml.Marshal(evp)
 	if err != nil {
-		logger.Error.Printf("Serialize operation:%s soap body failed with error:%s", operation, err.Error())
+		logger.Error.Printf("Serialize operation:%s soap body failed with error:%v", operation, err)
 		return err
 	}
 	httpBody := "<?xml version='1.0' encoding='utf-8'?>\n" + string(bodyBuf)
@@ -317,7 +317,7 @@ func (p *SOAPPort) Call(operation string, response interface{}, soapBody interfa
 
 	req, err := http.NewRequest("POST", p.endpoint, bytes.NewReader([]byte(httpBody)))
 	if err != nil {
-		logger.Error.Printf("Formatting query %s failed with error:%s", p.endpoint, err.Error())
+		logger.Error.Printf("Formatting query %s failed with error:%v", p.endpoint, err)
 		return err
 	}
 	req.Header.Set("Content-Type", "text/xml; charset=\"utf-8\"")
@@ -325,14 +325,14 @@ func (p *SOAPPort) Call(operation string, response interface{}, soapBody interfa
 	req.Header.Set("User-Agent", "gowsdl/0.1")
 	resp, err := p.client.Do(req)
 	if err != nil {
-		logger.Error.Printf("Query soap operation:%s failed with error:%s", operation, err.Error())
+		logger.Error.Printf("Query soap operation:%s failed with error:%v", operation, err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	mtomBoundary, err := getMtomHeader(resp.Header.Get("Content-Type"))
 	if err != nil {
-		logger.Error.Printf("Query soap operation:%s while decode response Content-Type failed with error:%s", operation, err.Error())
+		logger.Error.Printf("Query soap operation:%s while decode response Content-Type failed with error:%v", operation, err)
 		return err
 	}
 
@@ -340,7 +340,7 @@ func (p *SOAPPort) Call(operation string, response interface{}, soapBody interfa
 	if DebugSoapResponse {
 		respBody, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			logger.Error.Printf("Read result by queried url:%s failed with error:%s", p.endpoint, err.Error())
+			logger.Error.Printf("Read result by queried url:%s failed with error:%v", p.endpoint, err)
 			return err
 		}
 		logger.Trace.Printf("Query soap operation:%s soap_action:%s status:%d message:%s body:\n%s", operation, op.soapAction, resp.StatusCode, resp.Status, string(respBody))
@@ -360,13 +360,13 @@ func (p *SOAPPort) Call(operation string, response interface{}, soapBody interfa
 	}
 
 	if err := dec.Decode(respEnvelope); err != nil {
-		logger.Error.Printf("Query soap operation:%s while decode response body failed with error:%s", operation, err.Error())
+		logger.Error.Printf("Query soap operation:%s while decode response body failed with error:%v", operation, err)
 		return err
 	}
 
 	fault := respEnvelope.Body.Fault
 	if fault != nil {
-		logger.Error.Printf("Query soap operation:%s while response got fault:%s", operation, fault.Error())
+		logger.Error.Printf("Query soap operation:%s while response got fault:%v", operation, fault)
 		return fault
 	}
 

@@ -42,7 +42,7 @@ func NewMemcacheSession(name string, conf cachingenv.CacheConnectorConfig) (*Mem
 
 	err := s.Client.Ping()
 	if err != nil {
-		logger.Error.Printf("connect memcache %s %s failed with error:%s", name, s.Addr, err.Error())
+		logger.Error.Printf("connect memcache %s %s failed with error:%v", name, s.Addr, err)
 		go s.StartKeepalive()
 		return s, err
 	}
@@ -88,7 +88,7 @@ func (s *MemCacheSession) StartKeepalive() {
 func (s *MemCacheSession) Get(key string) ([]byte, error) {
 	val, err := s.Client.Get(key)
 	if err != nil {
-		logger.Warning.Printf("get %s failed with error:%s\n", key, err.Error())
+		logger.Warning.Printf("get %s failed with error:%v", key, err)
 		return nil, err
 	}
 	return val.Value, err
@@ -102,7 +102,7 @@ func (s *MemCacheSession) Set(key string, value []byte, expire time.Duration) bo
 		Expiration: int32(expire.Seconds()),
 	})
 	if err != nil {
-		logger.Error.Printf("set %s failed with error:%s\n", key, err.Error())
+		logger.Error.Printf("set %s failed with error:%v", key, err)
 		return false
 	}
 	return true

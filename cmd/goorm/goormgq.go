@@ -37,7 +37,7 @@ func main() {
 	case "create":
 		err = projectCmd.Parse(os.Args[2:])
 		if nil != err {
-			fmt.Println(err.Error())
+			fmt.Println(err)
 		}
 		err = doCreateProject(*projectConfig, projectCmd.Args())
 		break
@@ -45,12 +45,12 @@ func main() {
 		err = modelCmd.Parse(os.Args[2:])
 		err = doCreateModel(*modelConfig, *modelDir, modelCmd.Args())
 		if nil != err {
-			fmt.Println(err.Error())
+			fmt.Println(err)
 		}
 		break
 	default:
 		err = fmt.Errorf("Unsupported command '%s'", os.Args[0])
-		fmt.Println(err.Error())
+		fmt.Println(err)
 		break
 	}
 
@@ -105,7 +105,7 @@ func doCreateProject(configFile string, args []string) error {
 		if "" == r0 {
 			if utils.IsPathNotExists(r0) {
 				err = fmt.Errorf("'%s' does not exists", r0)
-				fmt.Println(err.Error())
+				fmt.Println(err)
 				return err
 			}
 			s.DockerfileTemplate = r0
@@ -120,7 +120,7 @@ func doCreateProject(configFile string, args []string) error {
 		if "" == r0 {
 			if utils.IsPathNotExists(r0) {
 				err = fmt.Errorf("'%s' does not exists", r0)
-				fmt.Println(err.Error())
+				fmt.Println(err)
 				return err
 			}
 			s.JenkinsfileTemplate = r0
@@ -176,7 +176,7 @@ func doCreateModel(configFile string, modelDir string, args []string) error {
 	if readEnter {
 		// todo
 		err = fmt.Errorf("Read model parameters from keyboards enter not supported")
-		fmt.Println(err.Error())
+		fmt.Println(err)
 		return err
 	}
 
@@ -208,7 +208,7 @@ func unmarshalConfig(filePath string, v interface{}) error {
 		err = json.Unmarshal(fileContent, v)
 	} else {
 		err = fmt.Errorf("Unsupported config file '%s'", filePath)
-		fmt.Println(err.Error())
+		fmt.Println(err)
 	}
 
 	if nil != err {

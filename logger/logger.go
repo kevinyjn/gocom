@@ -99,7 +99,7 @@ func initFilelog(logPath string, logLevel string) {
 
 	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatalf("Open logger file:%s failed with error:%s", logPath, err.Error())
+		log.Fatalf("Open logger file:%s failed with error:%v", logPath, err)
 	}
 
 	loggerFlag := log.Ldate | log.Ltime

@@ -30,7 +30,7 @@ func InitCacheProxy(cachesConfig map[string]cachingenv.CacheConnectorConfig) boo
 		if cachingenv.CachingDriverRedis == cnf.Driver {
 			rc, err := redisadapter.NewRedisSession(name, cnf)
 			if err != nil {
-				logger.Error.Printf("connect %s %s failed with error:%s", cnf.Driver, rc.GetConnectionString(), err.Error())
+				logger.Error.Printf("connect %s %s failed with error:%v", cnf.Driver, rc.GetConnectionString(), err)
 			}
 			if rc != nil {
 				cachesessions[name] = rc
@@ -38,7 +38,7 @@ func InitCacheProxy(cachesConfig map[string]cachingenv.CacheConnectorConfig) boo
 		} else if cachingenv.CachingDriverMemcache == cnf.Driver {
 			rc, err := memcacheadapter.NewMemcacheSession(name, cnf)
 			if err != nil {
-				logger.Error.Printf("connect %s %s failed with error:%s", cnf.Driver, rc.GetConnectionString(), err.Error())
+				logger.Error.Printf("connect %s %s failed with error:%v", cnf.Driver, rc.GetConnectionString(), err)
 			}
 			if rc != nil {
 				cachesessions[name] = rc

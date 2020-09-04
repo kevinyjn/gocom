@@ -292,7 +292,7 @@ func (s *HTTPNotifier) DoQuery(action string, payload interface{}, response inte
 			err = fmt.Errorf("unsupported serializing type:%s", s.SerializingType)
 		}
 		if err != nil {
-			logger.Error.Printf("serializing payload data as %s failed, %s", s.SerializingType, err.Error())
+			logger.Error.Printf("serializing payload data as %s failed with error:%v", s.SerializingType, err)
 			return err
 		}
 
@@ -319,7 +319,7 @@ func (s *HTTPNotifier) DoQuery(action string, payload interface{}, response inte
 			soapclient.WithHTTPProxies(s.Proxies),
 		)
 		if err != nil {
-			logger.Error.Printf("Open soap client by endpoint:%s failed with error:%s", s.Endpoint, err.Error())
+			logger.Error.Printf("Open soap client by endpoint:%s failed with error:%v", s.Endpoint, err)
 			return err
 		}
 
@@ -330,7 +330,7 @@ func (s *HTTPNotifier) DoQuery(action string, payload interface{}, response inte
 		}
 		err = sp.Call(action, response, payload, opts.soapEvpHeaders)
 		if err != nil {
-			logger.Error.Printf("Call soap operation:%s on port:%s failed with error:%s", action, s.SoapPortName, err.Error())
+			logger.Error.Printf("Call soap operation:%s on port:%s failed with error:%v", action, s.SoapPortName, err)
 			return err
 		}
 	} else {

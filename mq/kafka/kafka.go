@@ -70,10 +70,10 @@ func (r *Kafka) Run() {
 			// 	// backstop
 			// 	if r.Conn != nil && !r.Conn.IsClosed() {
 			// 		if err := r.Channel.Cancel("", true); err != nil {
-			// 			logger.Error.Printf("Kafka %s cancel channel failed with error:%s", r.Name, err.Error())
+			// 			logger.Error.Printf("Kafka %s cancel channel failed with error:%v", r.Name, err)
 			// 		}
 			// 		if err := r.Conn.Close(); err != nil {
-			// 			logger.Error.Printf("Kafka %s close connection failed with error:%s", r.Name, err.Error())
+			// 			logger.Error.Printf("Kafka %s close connection failed with error:%v", r.Name, err)
 			// 		}
 			// 	}
 
@@ -99,13 +99,13 @@ func (r *Kafka) Run() {
 			logger.Info.Printf("consuming topic: %s\n", cm.Topic)
 			r.consume(cm)
 		case err := <-r.Done:
-			logger.Error.Printf("Kafka connection:%s done with error:%s", r.Name, err.Error())
+			logger.Error.Printf("Kafka connection:%s done with error:%v", r.Name, err)
 			r.close()
 		// case err := <-r.connClosed:
-		// 	logger.Error.Printf("Kafka connection:%s closed with error:%s", r.Name, err.Error())
+		// 	logger.Error.Printf("Kafka connection:%s closed with error:%v", r.Name, err)
 		// 	r.close()
 		// case err := <-r.channelClosed:
-		// 	logger.Error.Printf("Kafka channel:%s closed with error:%s", r.Name, err.Error())
+		// 	logger.Error.Printf("Kafka channel:%s closed with error:%v", r.Name, err)
 		// 	r.close()
 		case <-r.Close:
 			r.close()
@@ -257,7 +257,7 @@ func (r *Kafka) publish(pm *PublishingMsg) error {
 		pm.PublishStatus <- status
 	}
 	if err != nil {
-		logger.Error.Printf("Publish message key:%s value:%s failed with error: %s", string(pm.Key), string(pm.Body), err.Error())
+		logger.Error.Printf("Publish message key:%s value:%s failed with error: %v", string(pm.Key), string(pm.Body), err)
 		return err
 	}
 	return nil
@@ -278,7 +278,7 @@ func (r *Kafka) handleConsumes(cm *ConsumerProxy) {
 	for {
 		msg, err := r.Reader.FetchMessage(context.Background())
 		if nil != err {
-			logger.Error.Printf("Consume kafka message with topic:%s failed with error:%s", cm.Topic, err.Error())
+			logger.Error.Printf("Consume kafka message with topic:%s failed with error:%v", cm.Topic, err)
 			// TODO error process, weather should reconnect
 			r.Done <- fmt.Errorf("Kafka reader by topic:%s closed", cm.Topic)
 		} else {

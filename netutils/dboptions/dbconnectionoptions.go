@@ -223,7 +223,7 @@ func (o *DBConnectionPoolOptions) parseCommonDSN(dsn string) error {
 		}
 		port, err := strconv.Atoi(slices[1])
 		if nil != err {
-			logger.Error.Printf("Convert port part:%s from dsn:%s failed with error:%s", slices[1], dsn, err.Error())
+			logger.Error.Printf("Convert port part:%s from dsn:%s failed with error:%v", slices[1], dsn, err)
 		} else {
 			o.Port = port
 		}

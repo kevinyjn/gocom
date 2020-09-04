@@ -150,7 +150,7 @@ func HTTPGetJSON(queryURL string, params *map[string]string, options ...ClientOp
 	result := map[string]interface{}{}
 	err = json.Unmarshal(resp, &result)
 	if err != nil {
-		logger.Error.Printf("Parsing result queried from url:%s response:%s failed with error:%s", queryURL, string(resp), err.Error())
+		logger.Error.Printf("Parsing result queried from url:%s response:%s failed with error:%v", queryURL, string(resp), err)
 		return nil, err
 	}
 
@@ -233,7 +233,7 @@ func HTTPPostJSON(queryURL string, params map[string]interface{}, options ...Cli
 	result := map[string]interface{}{}
 	err = json.Unmarshal(resp, &result)
 	if err != nil {
-		logger.Error.Printf("Parsing result queried from url:%s response:%s failed with error:%s", queryURL, string(resp), err.Error())
+		logger.Error.Printf("Parsing result queried from url:%s response:%s failed with error:%v", queryURL, string(resp), err)
 		return nil, err
 	}
 
@@ -254,7 +254,7 @@ func HTTPPostJSONEx(queryURL string, params interface{}, result interface{}, opt
 
 	err = json.Unmarshal(resp, result)
 	if err != nil {
-		logger.Error.Printf("Parsing result queried from url:%s response:%s failed with error:%s", queryURL, string(resp), err.Error())
+		logger.Error.Printf("Parsing result queried from url:%s response:%s failed with error:%v", queryURL, string(resp), err)
 		return err
 	}
 
@@ -265,7 +265,7 @@ func HTTPPostJSONEx(queryURL string, params interface{}, result interface{}, opt
 func HTTPQuery(method string, queryURL string, body io.Reader, options ...ClientOption) ([]byte, error) {
 	req, err := http.NewRequest(method, queryURL, body)
 	if err != nil {
-		logger.Error.Printf("Formatting query %s failed with error:%s", queryURL, err.Error())
+		logger.Error.Printf("Formatting query %s failed with error:%v", queryURL, err)
 		return nil, err
 	}
 	opts := defaultHTTPClientJSONOptions()
@@ -282,13 +282,13 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	if opts.tlsOptions != nil && opts.tlsOptions.Enabled {
 		certs, err := tls.LoadX509KeyPair(opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile)
 		if err != nil {
-			logger.Error.Printf("Load tls certificates:%s and %s failed with error:%s", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile, err.Error())
+			logger.Error.Printf("Load tls certificates:%s and %s failed with error:%v", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile, err)
 			return nil, err
 		}
 
 		// ca, err := x509.ParseCertificate(certs.Certificate[0])
 		// if err != nil {
-		// 	logger.Error.Printf("Parse certificate faield with error:%s", err.Error())
+		// 	logger.Error.Printf("Parse certificate faield with error:%v", err)
 		// } else {
 		// 	caPool.AddCert(ca)
 		// }
@@ -296,7 +296,7 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 		if opts.tlsOptions.CaFile != "" {
 			caData, err := ioutil.ReadFile(opts.tlsOptions.CaFile)
 			if err != nil {
-				logger.Error.Printf("Load tls root CA:%s failed with error:%s", opts.tlsOptions.CaFile, err.Error())
+				logger.Error.Printf("Load tls root CA:%s failed with error:%v", opts.tlsOptions.CaFile, err)
 				return nil, err
 			}
 			caPool := x509.NewCertPool()
@@ -328,14 +328,14 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error.Printf("query %s failed with error:%s", queryURL, err.Error())
+		logger.Error.Printf("query %s failed with error:%v", queryURL, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error.Printf("Read result by queried url:%s failed with error:%s", queryURL, err.Error())
+		logger.Error.Printf("Read result by queried url:%s failed with error:%v", queryURL, err)
 		return nil, err
 	}
 

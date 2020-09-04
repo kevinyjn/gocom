@@ -86,11 +86,17 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 }
 
 // InitMQWithRPC init mq with RPC
-func InitMQWithRPC(key string, rpcType int, connCfg *mqenv.MQConnectorConfig, mqCfg *Config) error {
+func InitMQWithRPC(topicCategory string, rpcType int, connCfg *mqenv.MQConnectorConfig, mqCfg *Config) error {
 	if mqCfg == nil || connCfg == nil {
-		return fmt.Errorf("Initialize mq rpc with key:%s rpc_type:%d failed, invalid conn_cofig or invalid mq_config", key, rpcType)
+		return fmt.Errorf("Initialize mq rpc with key:%s rpc_type:%d failed, invalid conn_cofig or invalid mq_config", topicCategory, rpcType)
 	}
 	if connCfg.Driver == mqenv.DriverTypeAMQP {
+		if "" == mqCategoryDrivers[topicCategory] {
+			mqCategoryDrivers[topicCategory] = connCfg.Driver
+		}
+		if nil == GetMQConfig(topicCategory) {
+			GetMQRoutes()[topicCategory] = *mqCfg
+		}
 		amqpCfg := &rabbitmq.AMQPConfig{
 			Queue:           mqCfg.Queue,
 			QueueDurable:    mqCfg.Durable,
@@ -99,11 +105,11 @@ func InitMQWithRPC(key string, rpcType int, connCfg *mqenv.MQConnectorConfig, mq
 			ExchangeType:    mqCfg.Exchange.Type,
 			BindingKey:      mqCfg.BindingKey,
 		}
-		if rabbitmq.InitRPCRabbitMQ(key, rpcType, connCfg, amqpCfg) == nil {
+		if rabbitmq.InitRPCRabbitMQ(topicCategory, rpcType, connCfg, amqpCfg) == nil {
 			return errors.New("Initialize rabbitmq mq rpc failed")
 		}
 	} else {
-		logger.Error.Printf("Initialize mq rpc with key:%s rpc_type:%d and driver:%s failed, driver not supported", key, rpcType, connCfg.Driver)
+		logger.Error.Printf("Initialize mq rpc with key:%s rpc_type:%d and driver:%s failed, driver not supported", topicCategory, rpcType, connCfg.Driver)
 		return errors.New("Invalid mq rpc driver")
 	}
 	return nil
@@ -128,12 +134,21 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 	}
 	mqDriver := mqCategoryDrivers[mqCategory]
 	if mqenv.DriverTypeAMQP == mqDriver {
-		inst, err := rabbitmq.GetRabbitMQ(mqCategory)
-		if nil != err {
-			return err
+		if mqConfig.RPCEnabled {
+			rpcInst := rabbitmq.GetRPCRabbitMQWithoutConnectedChecking(mqCategory)
+			if nil == rpcInst {
+				return fmt.Errorf("No RPC rabbitmq instance by %s found", mqCategory)
+			}
+			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy)
+			rpcInst.Consume <- pxy
+		} else {
+			inst, err := rabbitmq.GetRabbitMQ(mqCategory)
+			if nil != err {
+				return err
+			}
+			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy)
+			inst.Consume <- pxy
 		}
-		pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy)
-		inst.Consume <- pxy
 	} else if mqenv.DriverTypeKafka == mqDriver {
 		inst, err := kafka.GetKafka(mqCategory)
 		if nil != err {
@@ -157,12 +172,20 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 	}
 	mqDriver := mqCategoryDrivers[mqCategory]
 	if mqenv.DriverTypeAMQP == mqDriver {
-		inst, err := rabbitmq.GetRabbitMQ(mqCategory)
-		if nil != err {
-			return err
+		if mqConfig.RPCEnabled {
+			rpcInst := rabbitmq.GetRPCRabbitMQ(mqCategory)
+			if nil == rpcInst {
+				return fmt.Errorf("No RPC rabbitmq instance by %s found", mqCategory)
+			}
+			rpcInst.Publish <- publishMsg
+		} else {
+			inst, err := rabbitmq.GetRabbitMQ(mqCategory)
+			if nil != err {
+				return err
+			}
+			msg := rabbitmq.GenerateRabbitMQPublishMessage(publishMsg)
+			inst.Publish <- msg
 		}
-		msg := rabbitmq.GenerateRabbitMQPublishMessage(publishMsg)
-		inst.Publish <- msg
 	} else if mqenv.DriverTypeKafka == mqDriver {
 		inst, err := kafka.GetKafka(mqCategory)
 		if nil != err {
