@@ -35,7 +35,9 @@ type RoutesEnv struct {
 	MQs map[string]Config `yaml:"mq"`
 }
 
-var mqRoutesEnv = RoutesEnv{}
+var mqRoutesEnv = RoutesEnv{
+	MQs: map[string]Config{},
+}
 
 // GetMQConfig config
 func GetMQConfig(category string) *Config {
