@@ -7,6 +7,9 @@ import (
 
 // ValidateRequired validator
 func ValidateRequired(v reflect.Value, label string) error {
+	if false == v.IsValid() {
+		return fmt.Errorf("%s不能为空", label)
+	}
 	switch v.Type().Kind() {
 	case reflect.String:
 		if v.String() != "" {
@@ -43,6 +46,10 @@ func ValidateRequired(v reflect.Value, label string) error {
 			return nil
 		}
 		break
+	case reflect.Ptr:
+		if false == v.IsNil() {
+			return nil
+		}
 	default:
 		break
 	}

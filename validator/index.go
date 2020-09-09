@@ -13,11 +13,11 @@ func Validate(v interface{}) error {
 	msgs := []string{}
 	value := reflect.ValueOf(v)
 	t := reflect.TypeOf(v)
-	if value.Type().Kind() == reflect.Ptr {
+	if value.IsValid() && value.Type().Kind() == reflect.Ptr {
 		value = value.Elem()
 		t = t.Elem()
 	}
-	if value.Type().Kind() != reflect.Struct {
+	if !value.IsValid() || value.Type().Kind() != reflect.Struct {
 		return nil
 	}
 

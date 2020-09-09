@@ -1,12 +1,22 @@
-package main
+package unittests
 
 import (
 	"fmt"
+	"testing"
 
 	"github.com/kevinyjn/gocom/utils"
 )
 
-func testPropertyTagParser() {
+func TestPropertyTagParser(t *testing.T) {
+	err := testPropertyTagParser()
+	if nil != err {
+		t.Errorf("Parse properties failed with error:%v", err)
+	} else {
+		fmt.Printf("Succeed.\n")
+	}
+}
+
+func testPropertyTagParser() error {
 	texts := []string{
 		`Value Separator,default:\,`,
 		"Escape Character,default:\\",
@@ -20,4 +30,5 @@ func testPropertyTagParser() {
 		name, attributes := utils.ParsePropertyTagValue(text)
 		fmt.Printf("- [%s]\n  extracted: name:[%s] attributes:%+v\n", text, name, attributes)
 	}
+	return nil
 }
