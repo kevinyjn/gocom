@@ -92,8 +92,7 @@ func createChannel(c *amqp.Connection, amqpCfg *AMQPConfig) (*amqp.Channel, erro
 	return channel, nil
 }
 
-func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error) {
-	logger.Info.Printf("declared Exchange, declaring Queue %q", amqpCfg.Queue)
+func inspectQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error) {
 	durable := amqpCfg.QueueDurable
 	autoDelete := false
 	queueName := amqpCfg.Queue
@@ -110,6 +109,12 @@ func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error
 		false,      // noWait
 		nil,        // arguments
 	)
+	return &queue, err
+}
+
+func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error) {
+	logger.Info.Printf("declared Exchange, declaring Queue %q", amqpCfg.Queue)
+	queue, err := inspectQueue(channel, amqpCfg)
 	if err != nil {
 		logger.Error.Printf("Queue declare: %v", err)
 		return nil, fmt.Errorf("Queue Declare: %v", err)
@@ -130,7 +135,7 @@ func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error
 			return nil, fmt.Errorf("Queue Bind: %v", err)
 		}
 	}
-	return &queue, nil
+	return queue, nil
 }
 
 func (r *RabbitMQ) init() error {
