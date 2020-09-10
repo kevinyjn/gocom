@@ -7,6 +7,8 @@ import (
 
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq/mqenv"
+	"github.com/kevinyjn/gocom/netutils/pinger"
+	"github.com/kevinyjn/gocom/netutils/sshtunnel"
 
 	"github.com/streadway/amqp"
 )
@@ -22,20 +24,7 @@ func InitRabbitMQ(mqConnName string, connCfg *mqenv.MQConnectorConfig, amqpCfg *
 		ok = false
 	}
 	if !ok {
-		amqpInst = &RabbitMQ{
-			Name:             mqConnName,
-			Config:           amqpCfg,
-			ConnConfig:       connCfg,
-			Publish:          make(chan *RabbitPublishingMsg),
-			Consume:          make(chan *RabbitConsumerProxy),
-			Done:             make(chan error),
-			Close:            make(chan interface{}),
-			consumers:        make([]*RabbitConsumerProxy, 0),
-			pendingConsumers: make([]*RabbitConsumerProxy, 0),
-			pendingPublishes: make([]*RabbitPublishingMsg, 0),
-			connecting:       false,
-			queue:            nil,
-		}
+		amqpInst = NewRabbitMQ(mqConnName, connCfg, amqpCfg)
 		amqpInsts[mqConnName] = amqpInst
 		err := amqpInst.init()
 		if err == nil {
@@ -138,12 +127,42 @@ func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error
 	return queue, nil
 }
 
+// NewRabbitMQ with parameters
+func NewRabbitMQ(mqConnName string, connCfg *mqenv.MQConnectorConfig, amqpCfg *AMQPConfig) *RabbitMQ {
+	r := &RabbitMQ{}
+	r.initWithParameters(mqConnName, connCfg, amqpCfg)
+	return r
+}
+
+func (r *RabbitMQ) initWithParameters(mqConnName string, connCfg *mqenv.MQConnectorConfig, amqpCfg *AMQPConfig) {
+	r.Name = mqConnName
+	r.Config = amqpCfg
+	r.ConnConfig = connCfg
+	r.Publish = make(chan *mqenv.MQPublishMessage)
+	r.Consume = make(chan *RabbitConsumerProxy)
+	r.Done = make(chan error)
+	r.Close = make(chan interface{})
+	r.QueueStatus = &RabbitQueueStatus{
+		QueueName:      amqpCfg.Queue,
+		RefreshingTime: 0,
+	}
+	r.consumers = make([]*RabbitConsumerProxy, 0)
+	r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
+	r.pendingPublishes = make([]*mqenv.MQPublishMessage, 0)
+	r.connecting = false
+	r.queue = nil
+	r.afterEnsureQueue = r.ensurePendings
+}
+
 func (r *RabbitMQ) init() error {
 	logger.Info.Printf("Initializing amqp instance:%s", r.Name)
 	return r.initConn()
 }
 
 // Run start
+// 1. init the rabbitmq conneciton
+// 2. expect messages from the message hub on the Publish channel
+// 3. if the connection is closed, try to restart it
 func (r *RabbitMQ) Run() {
 	tick := time.NewTicker(time.Second * 2)
 	for {
@@ -176,7 +195,6 @@ func (r *RabbitMQ) Run() {
 
 		select {
 		case pm := <-r.Publish:
-			logger.Trace.Printf("publish message: %s\n", pm.Body)
 			r.publish(pm)
 		case cm := <-r.Consume:
 			if "" != r.queueName {
@@ -258,32 +276,39 @@ func (r *RabbitMQ) close() {
 	if r.Conn != nil && !r.Conn.IsClosed() {
 		r.Conn.Close()
 	}
+	if nil != r.sshTunnel {
+		r.sshTunnel.Stop()
+		r.sshTunnel = nil
+	}
 	r.Conn = nil
 }
 
 // try to start a new connection, channel and deliveries channel. if failed, try again in 5 sec.
 func (r *RabbitMQ) initConn() error {
-	cnf := r.ConnConfig
-	if cnf.Driver != mqenv.DriverTypeAMQP {
-		logger.Error.Printf("Initialize rabbitmq connection by configure:%s failed, the configure driver:%s does not fit.", r.Name, cnf.Driver)
+	if r.ConnConfig.Driver != mqenv.DriverTypeAMQP {
+		logger.Error.Printf("Initialize rabbitmq connection by configure:%s failed, the configure driver:%s does not fit.", r.Name, r.ConnConfig.Driver)
 		return errors.New("Invalid driver for rabbitmq")
 	}
 
 	r.connecting = true
-	amqpAddr := fmt.Sprintf("amqp://%s:%s@%s:%d/%s", cnf.User, cnf.Password, cnf.Host, cnf.Port, cnf.Path)
+	connDSN, connDescription, err := r.formatConnectionDSN()
+	if nil != err {
+		logger.Error.Printf("Initialize rabbitmq connection by configure:%s while format amqp conneciton DSN failed with error:%v", r.Name, err)
+		return err
+	}
 
 	go func() {
 		ticker := time.NewTicker(AMQPReconnectDuration * time.Second)
 		for {
 			select {
 			case <-ticker.C:
-				if conn, err := dial(amqpAddr); err != nil {
+				if conn, err := dial(connDSN); err != nil {
 					// r.connecting = false
 					logger.Error.Println(err)
 					logger.Error.Println("node will only be able to respond to local connections")
 					logger.Error.Printf("trying to reconnect in %d seconds...", AMQPReconnectDuration)
 				} else {
-					logger.Info.Printf("Connecting amqp:%s:%d/%s by user:%s succeed", cnf.Host, cnf.Port, cnf.Path, cnf.User)
+					logger.Info.Printf("Connecting rabbitmq %s succeed", connDescription)
 					r.connecting = false
 					r.Conn = conn
 					ticker.Stop()
@@ -308,6 +333,42 @@ func (r *RabbitMQ) initConn() error {
 	return nil
 }
 
+func (r *RabbitMQ) formatConnectionDSN() (string, string, error) {
+	cnf := r.ConnConfig
+	host := cnf.Host
+	port := cnf.Port
+	var err error
+	if "" != cnf.SSHTunnelDSN && !pinger.Connectable(host, port) {
+		if nil != r.sshTunnel {
+			r.sshTunnel.Stop()
+			r.sshTunnel = nil
+		}
+		for {
+			var sshTunnel *sshtunnel.TunnelForwarder
+			sshTunnel, err = sshtunnel.NewSSHTunnel(cnf.SSHTunnelDSN, host, port)
+			err = sshTunnel.ParseFromDSN(cnf.SSHTunnelDSN)
+			if nil != err {
+				logger.Error.Printf("format rabbitmq address while parse SSH Tunnel DSN:%s failed with error:%v", cnf.SSHTunnelDSN, err)
+				break
+			}
+
+			err = sshTunnel.Start()
+			if nil != err {
+				logger.Error.Printf("format rabbitmq address while start SSH Tunnel failed with error:%v", err)
+				break
+			}
+			r.sshTunnel = sshTunnel
+			host = sshTunnel.LocalHost()
+			port = sshTunnel.LocalPort()
+			break
+		}
+	}
+
+	connDSN := fmt.Sprintf("amqp://%s:%s@%s:%d/%s", cnf.User, cnf.Password, host, port, cnf.Path)
+	connDescription := fmt.Sprintf("amqp://%s:<password>@%s:%d/%s", cnf.User, cnf.Host, cnf.Port, cnf.Path)
+	return connDSN, connDescription, err
+}
+
 func (r *RabbitMQ) ensureQueue() error {
 	if nil == r.Conn {
 		return fmt.Errorf("RabbitMQ connection were not connected when ensuring queue:%s", r.Config.Queue)
@@ -319,31 +380,41 @@ func (r *RabbitMQ) ensureQueue() error {
 		logger.Fatal.Printf("create queue:%s failed with error:%v", r.Config.Queue, err)
 		return err
 	}
+	r.QueueStatus.QueueName = queue.Name
+	r.QueueStatus.Consumers = queue.Consumers
+	r.QueueStatus.Messages = queue.Messages
+	r.QueueStatus.RefreshingTime = time.Now().Unix()
 	r.queue = queue
 	r.queueName = queue.Name
 	r.connClosed = make(chan *amqp.Error)
 	r.channelClosed = make(chan *amqp.Error)
 	r.Conn.NotifyClose(r.connClosed)
 	r.Channel.NotifyClose(r.channelClosed)
+	if nil != r.afterEnsureQueue {
+		r.afterEnsureQueue()
+	}
+	return nil
+}
+
+func (r *RabbitMQ) ensurePendings() {
 	if r.pendingConsumers != nil && len(r.pendingConsumers) > 0 {
 		consumers := r.pendingConsumers
 		r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
 		for _, cm := range consumers {
-			cm.Queue = queue.Name
+			cm.Queue = r.queueName
 			r.consume(cm)
 		}
 	}
 	if r.pendingPublishes != nil && len(r.pendingPublishes) > 0 {
 		publishes := r.pendingPublishes
-		r.pendingPublishes = make([]*RabbitPublishingMsg, 0)
+		r.pendingPublishes = make([]*mqenv.MQPublishMessage, 0)
 		for _, pm := range publishes {
 			r.publish(pm)
 		}
 	}
-	return nil
 }
 
-func (r *RabbitMQ) publish(pm *RabbitPublishingMsg) error {
+func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 	if r.Channel == nil {
 		logger.Warning.Printf("pending publishing %dB body (%s)", len(pm.Body), pm.Body)
 		r.pendingPublishes = append(r.pendingPublishes, pm)
@@ -355,26 +426,33 @@ func (r *RabbitMQ) publish(pm *RabbitPublishingMsg) error {
 			return err
 		}
 	}
-	// logger.Trace.Printf("publishing %dB body (%s)", len(pm.Body), pm.Body)
+
+	exchangeName, routingKey := r.Config.ExchangeName, pm.RoutingKey
+	if nil != r.beforePublish {
+		exchangeName, routingKey = r.beforePublish(pm)
+	}
+	if logger.IsDebugEnabled() {
+		logger.Trace.Printf("publishing message(%s) with %dB body (%s)", pm.CorrelationID, len(pm.Body), pm.Body)
+	}
 
 	headers := amqp.Table{}
 	for k, v := range pm.Headers {
 		headers[k] = v
 	}
 	err := r.Channel.Publish(
-		r.Config.ExchangeName, // publish to an exchange
-		pm.RoutingKey,         // routing to 0 or more queues
-		false,                 // mandatory
-		false,                 // immediate
+		exchangeName, // publish to an exchange
+		routingKey,   // routing to 0 or more queues
+		false,        // mandatory
+		false,        // immediate
 		amqp.Publishing{
 			Headers:         headers,
 			ContentType:     "application/json",
 			ContentEncoding: "",
 			Body:            pm.Body,
+			CorrelationId:   pm.CorrelationID,
+			ReplyTo:         pm.ReplyTo,
 			DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
 			Priority:        0,              // 0-9
-			// CorrelationId:   pm.CorrelationID,
-			// ReplyTo:         pm.ReplyTo,
 			// a bunch of application/implementation-specific fields
 		},
 	)
@@ -423,10 +501,10 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 		cm.Arguments,   // arguments
 	)
 	if err != nil {
-		logger.Error.Printf("consuming queue:%s failed with error:%v", cm.Queue, err)
+		logger.Error.Printf("consuming mq(%s) queue:%s failed with error:%v", r.Name, cm.Queue, err)
 		return err
 	}
-	logger.Info.Printf("Consuming mq with queue:%s ...", cm.Queue)
+	logger.Info.Printf("Now consuming mq(%s) with queue:%s ...", r.Name, cm.Queue)
 	go r.handleConsumes(cm.Callback, cm.AutoAck, deliveries)
 	return nil
 }
@@ -485,18 +563,4 @@ func GenerateRabbitMQConsumerProxy(consumeProxy *mqenv.MQConsumerProxy) *RabbitC
 		// Arguments:   consumeProxy.Arguments,
 	}
 	return pxy
-}
-
-// GenerateRabbitMQPublishMessage generate publish message
-func GenerateRabbitMQPublishMessage(publishMsg *mqenv.MQPublishMessage) *RabbitPublishingMsg {
-	msg := &RabbitPublishingMsg{
-		Body:          publishMsg.Body,
-		RoutingKey:    publishMsg.RoutingKey,
-		CorrelationID: publishMsg.CorrelationID,
-		ReplyTo:       publishMsg.ReplyTo,
-		PublishStatus: publishMsg.PublishStatus,
-		EventLabel:    publishMsg.EventLabel,
-		Headers:       publishMsg.Headers,
-	}
-	return msg
 }

@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"github.com/kevinyjn/gocom/mq/mqenv"
+	"github.com/kevinyjn/gocom/netutils/sshtunnel"
 
 	"github.com/streadway/amqp"
 )
@@ -35,17 +36,6 @@ type RabbitConsumerProxy struct {
 	Arguments   amqp.Table
 }
 
-// RabbitPublishingMsg publishing message
-type RabbitPublishingMsg struct {
-	Body          []byte
-	RoutingKey    string
-	CorrelationID string             `json:"correlationId"`
-	ReplyTo       string             `json:"replyTo"`
-	PublishStatus chan mqenv.MQEvent `json:"-"`
-	EventLabel    string             `json:"eventLabel"`
-	Headers       map[string]string  `json:"headers"`
-}
-
 // RabbitQueueStatus queue status
 type RabbitQueueStatus struct {
 	RefreshingTime int64
@@ -59,40 +49,16 @@ type AMQPConsumerCallback func(amqp.Delivery)
 
 // RabbitMQ instance
 type RabbitMQ struct {
-	Name       string
-	Publish    chan *RabbitPublishingMsg
-	Consume    chan *RabbitConsumerProxy
-	Done       chan error
-	Channel    *amqp.Channel
-	Conn       *amqp.Connection
-	Config     *AMQPConfig
-	ConnConfig *mqenv.MQConnectorConfig
-	Close      chan interface{}
-
-	connClosed       chan *amqp.Error
-	channelClosed    chan *amqp.Error
-	consumers        []*RabbitConsumerProxy
-	pendingConsumers []*RabbitConsumerProxy
-	pendingPublishes []*RabbitPublishingMsg
-	connecting       bool
-	queueName        string
-	queue            *amqp.Queue
-}
-
-// RabbitRPCMQ rpc instance
-type RabbitRPCMQ struct {
 	Name        string
 	Publish     chan *mqenv.MQPublishMessage
 	Consume     chan *RabbitConsumerProxy
-	Deliveries  <-chan amqp.Delivery
 	Done        chan error
 	Channel     *amqp.Channel
 	Conn        *amqp.Connection
-	QueueStatus *RabbitQueueStatus
 	Config      *AMQPConfig
 	ConnConfig  *mqenv.MQConnectorConfig
 	Close       chan interface{}
-	RPCType     int
+	QueueStatus *RabbitQueueStatus
 
 	connClosed       chan *amqp.Error
 	channelClosed    chan *amqp.Error
@@ -102,6 +68,16 @@ type RabbitRPCMQ struct {
 	connecting       bool
 	queueName        string
 	queue            *amqp.Queue
+	sshTunnel        *sshtunnel.TunnelForwarder
+	afterEnsureQueue func()
+	beforePublish    func(*mqenv.MQPublishMessage) (string, string)
+}
+
+// RabbitRPC rpc instance
+type RabbitRPC struct {
+	RabbitMQ
+	Deliveries <-chan amqp.Delivery
+	RPCType    int
 }
 
 // Equals check if equals

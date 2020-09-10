@@ -34,16 +34,46 @@ func InitServiceHandler(app *iris.Application) error {
 		return err
 	}
 
+	err = mq.InitMQWithRPC("demo", mq.MQTypePublisher, &mqCfg, getDemoMQConfig())
+	if nil != err {
+		logger.Error.Printf("Initialize consumer %s failed with error:%v", "demo", err)
+		return err
+	}
+
+	err = mq.InitMQWithRPC("rpc-consumer", mq.MQTypeConsumer, &mqCfg, mq.GetMQConfig("rpc-consumer"))
+	if nil != err {
+		logger.Error.Printf("Initialize consumer %s failed with error:%v", "rpc-consumer", err)
+		return err
+	}
+
 	go func() {
-		tiker := time.NewTicker(time.Second * 5)
-		select {
-		case <-tiker.C:
-			testPublishFanoutMessage()
-			break
+		ticker1 := time.NewTimer(time.Second * 3)
+		ticker2 := time.NewTicker(time.Second * 3)
+		for {
+			select {
+			case <-ticker1.C:
+				o := getDemoMQConfig()
+				consumerProxy2 := mqenv.MQConsumerProxy{
+					Queue:       o.Queue,
+					Callback:    handleMQServiceMessage,
+					ConsumerTag: "demo",
+					AutoAck:     false,
+				}
+				mq.ConsumeMQ("demo", &consumerProxy2)
+				break
+			case <-ticker2.C:
+				testPublishRPCMessage()
+				break
+			}
 		}
-		tiker.Stop()
+		ticker1.Stop()
+		ticker2.Stop()
 	}()
 
+	return nil
+}
+
+func getDemoMQConfig() *mq.Config {
 	o := &mq.Config{
 		Instance: "default",
 		Queue:    "demo.queue.amqprpc.testing",
@@ -57,31 +87,7 @@ func InitServiceHandler(app *iris.Application) error {
 		Durable:     true,
 		RPCEnabled:  true,
 	}
-	err = mq.InitMQWithRPC("demo", mq.MQTypePublisher, &mqCfg, o)
-	if nil != err {
-		logger.Error.Printf("Initialize consumer %s failed with error:%v", "demo", err)
-		return err
-	}
-
-	consumerProxy2 := mqenv.MQConsumerProxy{
-		Queue:       o.Queue,
-		Callback:    handleMQServiceMessage,
-		ConsumerTag: "demo",
-		AutoAck:     false,
-	}
-	err = mq.ConsumeMQ("demo", &consumerProxy2)
-	if nil != err {
-		logger.Error.Printf("consumes %s failed with error:%v", "demo", err)
-		return err
-	}
-
-	err = mq.InitMQWithRPC("rpc-consumer", mq.MQTypeConsumer, &mqCfg, mq.GetMQConfig("rpc-consumer"))
-	if nil != err {
-		logger.Error.Printf("Initialize consumer %s failed with error:%v", "rpc-consumer", err)
-		return err
-	}
-
-	return err
+	return o
 }
 
 func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) {
@@ -100,15 +106,16 @@ func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) {
 	}
 }
 
-func testPublishFanoutMessage() {
+func testPublishRPCMessage() {
 	pm := &mqenv.MQPublishMessage{
 		Body:     []byte("Testing data"),
 		Response: make(chan []byte),
 		ReplyTo:  mq.GetMQConfig("rpc-consumer").Queue,
 	}
-	mq.PublishMQ("demo", pm)
-	// rpc := rabbitmq.GetRPCRabbitMQ("biz-consumer")
-	// rpc.Publish <- pm
+	err := mq.PublishMQ("demo", pm)
+	if nil != err {
+		fmt.Printf("WARNING: could not get valid mq instance by demo\n")
+	}
 
 	ticker := time.NewTicker(time.Duration(3000) * time.Millisecond)
 	select {
@@ -128,9 +135,11 @@ func testPublishWebMessage(ctx iris.Context) {
 		Response: make(chan []byte),
 		ReplyTo:  mq.GetMQConfig("rpc-consumer").Queue,
 	}
-	mq.PublishMQ("demo", pm)
-	// rpc := rabbitmq.GetRPCRabbitMQ("biz-consumer")
-	// rpc.Publish <- pm
+	err := mq.PublishMQ("demo", pm)
+	if nil != err {
+		ctx.WriteString(err.Error())
+		return
+	}
 
 	ticker := time.NewTicker(time.Duration(3000) * time.Millisecond)
 	select {

@@ -183,8 +183,7 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 			if nil != err {
 				return err
 			}
-			msg := rabbitmq.GenerateRabbitMQPublishMessage(publishMsg)
-			inst.Publish <- msg
+			inst.Publish <- publishMsg
 		}
 	} else if mqenv.DriverTypeKafka == mqDriver {
 		inst, err := kafka.GetKafka(mqCategory)

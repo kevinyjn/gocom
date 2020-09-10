@@ -165,7 +165,6 @@ func (o *DBConnectionPoolOptions) parseCommonDSN(dsn string) error {
 			o.Host = slices[1]
 		}
 		return nil
-		break
 	case "tidb":
 		o.Engine = EngineTiDB
 		o.Port = 4000
