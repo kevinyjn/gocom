@@ -66,3 +66,11 @@ func (s *Datasource) Count(bean interface{}) (int64, error) {
 	}
 	return GetInstance().Count(bean)
 }
+
+// Delete record
+func (s *Datasource) Delete(bean interface{}) (int64, error) {
+	if reflect.TypeOf(bean).Kind() != reflect.Ptr {
+		logger.Error.Printf("Delete bean:%+v failed, the operation needs a pointer passive", bean)
+	}
+	return GetInstance().Delete(bean)
+}

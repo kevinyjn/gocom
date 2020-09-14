@@ -111,6 +111,12 @@ func (m *ModelScaffolds) Encode() string {
 		fmt.Sprintf("func (m *%s) Fetch() (bool, error) {\n\treturn m.Datasource.Fetch(m)\n}\n", structureName),
 		"// Save record to database",
 		fmt.Sprintf("func (m *%s) Save() (bool, error) {\n\treturn m.Datasource.Save(m)\n}\n", structureName),
+		"// Exists by record",
+		fmt.Sprintf("func (m *%s) Exists() (bool, error) {\n\treturn m.Datasource.Exists(m)\n}\n", structureName),
+		"// Count record",
+		fmt.Sprintf("func (m *%s) Count() (int64, error) {\n\treturn m.Datasource.Count(m)\n}\n", structureName),
+		"// Delete record",
+		fmt.Sprintf("func (m *%s) Delete() (int64, error) {\n\treturn m.Datasource.Delete(m)\n}\n", structureName),
 	}
 
 	return strings.Join(lines, "\n")
