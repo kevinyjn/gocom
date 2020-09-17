@@ -102,17 +102,20 @@ func inspectQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, erro
 }
 
 func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error) {
-	logger.Info.Printf("declared Exchange, declaring Queue %q", amqpCfg.Queue)
+	if "" == amqpCfg.ExchangeName {
+		logger.Info.Printf("declaring Queue %q", amqpCfg.Queue)
+	} else {
+		logger.Info.Printf("declared Exchange %s(%s), declaring Queue %q", amqpCfg.ExchangeName, amqpCfg.ExchangeType, amqpCfg.Queue)
+	}
 	queue, err := inspectQueue(channel, amqpCfg)
 	if err != nil {
 		logger.Error.Printf("Queue declare: %v", err)
-		return nil, fmt.Errorf("Queue Declare: %v", err)
+		return nil, fmt.Errorf("Queue declare: %v", err)
 	}
 
-	logger.Info.Printf("declared Queue (%q %d messages, %d consumers), binding to Exchange (key %q)",
-		queue.Name, queue.Messages, queue.Consumers, amqpCfg.BindingKey)
-
 	if amqpCfg.BindingExchange {
+		logger.Info.Printf("declared Queue (%q %d messages, %d consumers), binding to Exchange %s (key %q)",
+			queue.Name, queue.Messages, queue.Consumers, amqpCfg.ExchangeName, amqpCfg.BindingKey)
 		if err = channel.QueueBind(
 			queue.Name,           // name of the queue
 			amqpCfg.BindingKey,   // bindingKey
@@ -120,9 +123,12 @@ func createQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error
 			false,                // noWait
 			nil,                  // arguments
 		); err != nil {
-			logger.Error.Printf("Queue bind: %v", err)
-			return nil, fmt.Errorf("Queue Bind: %v", err)
+			logger.Error.Printf("Queue bind failed with error:%v", err)
+			return nil, fmt.Errorf("Queue bind: %v", err)
 		}
+	} else {
+		logger.Info.Printf("declared Queue (%q %d messages, %d consumers)",
+			queue.Name, queue.Messages, queue.Consumers)
 	}
 	return queue, nil
 }
