@@ -59,6 +59,7 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 	mqCategoryDrivers[topicCategory] = instCnf.Driver
 	if instCnf.Driver == mqenv.DriverTypeAMQP {
 		amqpCfg := &rabbitmq.AMQPConfig{
+			ConnConfigName:  topicConfig.Instance,
 			Queue:           topicConfig.Queue,
 			QueueDurable:    topicConfig.Durable,
 			BindingExchange: topicConfig.Exchange.Name != "",
@@ -197,4 +198,21 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 		return fmt.Errorf("Invalid mq %s driver", mqCategory)
 	}
 	return err
+}
+
+// QueryMQRPC publishes a message and waiting the response
+func QueryMQRPC(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMessage, error) {
+	mqConfig := GetMQConfig(mqCategory)
+	if nil == mqConfig {
+		return nil, fmt.Errorf("Query RPC MQ with invalid category:%s", mqCategory)
+	}
+	mqDriver := mqCategoryDrivers[mqCategory]
+	if mqenv.DriverTypeAMQP == mqDriver {
+		inst, err := rabbitmq.GetRabbitMQ(mqCategory)
+		if nil != err {
+			return nil, err
+		}
+		return inst.QueryRPC(pm)
+	}
+	return nil, fmt.Errorf("Query RPC MQ not supported driver:%s", mqDriver)
 }

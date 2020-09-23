@@ -90,7 +90,7 @@ func getDemoMQConfig() *mq.Config {
 	return o
 }
 
-func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) {
+func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) []byte {
 	fmt.Println("handling mq service response message...", mqMsg)
 	mqTopic := "rpc-consumer"
 	pubMsg := mqenv.MQPublishMessage{
@@ -104,6 +104,7 @@ func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) {
 	if nil != err {
 		logger.Error.Printf("Publish mq request to service side failed with error:%v", err)
 	}
+	return nil
 }
 
 func testPublishRPCMessage() {

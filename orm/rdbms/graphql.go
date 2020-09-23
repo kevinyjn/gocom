@@ -442,7 +442,7 @@ func RegisterGraphQLRoutes(app router.Party, beans []interface{}) error {
 	return nil
 }
 
-func handlerMQGraphQLMessage(m mqenv.MQConsumerMessage) {
+func handlerMQGraphQLMessage(m mqenv.MQConsumerMessage) []byte {
 	routeName := m.RoutingKey
 	lastIdx := strings.LastIndex(routeName, ".")
 	if lastIdx >= 0 {
@@ -484,6 +484,7 @@ func handlerMQGraphQLMessage(m mqenv.MQConsumerMessage) {
 		Headers:       map[string]string{},
 	}
 	mq.PublishMQ(mqCategory, &publishMessage)
+	return nil
 }
 
 // RegisterGraphQLMQs register models as graphql mq api

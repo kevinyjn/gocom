@@ -16,6 +16,7 @@ const (
 
 // AMQPConfig queue config
 type AMQPConfig struct {
+	ConnConfigName  string
 	Queue           string
 	QueueDurable    bool
 	BindingExchange bool
@@ -45,7 +46,7 @@ type RabbitQueueStatus struct {
 }
 
 // AMQPConsumerCallback callback
-type AMQPConsumerCallback func(amqp.Delivery)
+type AMQPConsumerCallback func(amqp.Delivery) []byte
 
 // RabbitMQ instance
 type RabbitMQ struct {
@@ -71,6 +72,10 @@ type RabbitMQ struct {
 	sshTunnel        *sshtunnel.TunnelForwarder
 	afterEnsureQueue func()
 	beforePublish    func(*mqenv.MQPublishMessage) (string, string)
+	hostName         string
+	rpcName          string
+	rpcCallbacks     map[string]*mqenv.MQPublishMessage
+	pendingReplies   map[string]amqp.Delivery
 }
 
 // RabbitRPC rpc instance

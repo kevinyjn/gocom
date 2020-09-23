@@ -465,7 +465,7 @@ func IsObjectEquals(l interface{}, r interface{}) bool {
 
 // RandomString random string
 func RandomString(l int) string {
-	r := rand.New(rand.NewSource(time.Now().Unix()))
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	str := []byte(CharactorsBase)
 	sl := len(str)
 	result := []byte{}

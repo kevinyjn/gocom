@@ -1,5 +1,7 @@
 package mqenv
 
+import "time"
+
 // Constants
 const (
 	DriverTypeAMQP  = "rabbitmq"
@@ -40,26 +42,36 @@ type MQConsumerMessage struct {
 	CorrelationID string      `json:"correlationId"`
 	ConsumerTag   string      `json:"consumerTag"`
 	ReplyTo       string      `json:"replyTo"`
+	MessageID     string      `json:"messageId"`
+	AppID         string      `json:"appId"`
+	UserID        string      `json:"userId"`
+	ContentType   string      `json:"contentType"`
 	RoutingKey    string      `json:"routingKey"`
+	Timestamp     time.Time   `json:"-"`
 	Body          []byte      `json:"body"`
 	BindData      interface{} `json:"-"`
 }
 
 // MQPublishMessage publish message
 type MQPublishMessage struct {
-	Body             []byte            `json:"body"`
-	RoutingKey       string            `json:"routingKey"`
-	CorrelationID    string            `json:"correlationId"`
-	ReplyTo          string            `json:"replyTo"`
-	PublishStatus    chan MQEvent      `json:"-"`
-	EventLabel       string            `json:"eventLabel"`
-	Headers          map[string]string `json:"headers"`
-	Response         chan []byte
+	Body             []byte                 `json:"body"`
+	RoutingKey       string                 `json:"routingKey"`
+	CorrelationID    string                 `json:"correlationId"`
+	ReplyTo          string                 `json:"replyTo"`
+	MessageID        string                 `json:"messageId"`
+	AppID            string                 `json:"appId"`
+	UserID           string                 `json:"userId"`
+	ContentType      string                 `json:"contentType"`
+	PublishStatus    chan MQEvent           `json:"-"`
+	EventLabel       string                 `json:"eventLabel"`
+	Headers          map[string]string      `json:"headers"`
+	Response         chan MQConsumerMessage `json:"-"`
+	TimeoutSeconds   int
 	callbackDisabled bool
 }
 
 // MQConsumerCallback callback
-type MQConsumerCallback func(MQConsumerMessage)
+type MQConsumerCallback func(MQConsumerMessage) []byte
 
 // MQConsumerProxy consumer proxy
 type MQConsumerProxy struct {
@@ -81,3 +93,5 @@ func (m *MQPublishMessage) OnClosed() {
 func (m *MQPublishMessage) CallbackEnabled() bool {
 	return false == m.callbackDisabled
 }
+
+//
