@@ -81,7 +81,7 @@ func NewAccessLogger() (h iris.Handler, closer func() error) {
 	c.LogFunc = func(now time.Time, latency time.Duration, status, ip, method, path string, message interface{}, headerMessage interface{}) {
 		// line := fmt.Sprintf("%s | %v | %4v | %s | %s | %s", now.Format("2006/01/02T15:04:05"), status, latency, ip, method, path)
 		// output := columnize.SimpleFormat([]string{line}) + "\n"
-		output := fmt.Sprintf("%s %v %4v %s %s %s", now.Format("2006/01/02T15:04:05"), status, latency, ip, method, path)
+		output := fmt.Sprintf("%s %v %4v %s %s %s\n", now.Format("2006/01/02T15:04:05"), status, latency, ip, method, path)
 		//output := logger.Columnize(now.Format("2006/01/02T15:04:05"), latency, status, ip, method, path, message, headerMessage)
 		checkAccessLogRotate(now)
 		if nil != accessLogFile {
