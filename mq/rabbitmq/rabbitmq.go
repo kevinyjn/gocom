@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/kevinyjn/gocom/logger"
@@ -15,7 +16,11 @@ import (
 	"github.com/streadway/amqp"
 )
 
-var amqpInsts = map[string]*RabbitMQ{}
+// Variables
+var (
+	amqpInsts           = map[string]*RabbitMQ{}
+	trackerQueue string = ""
+)
 
 // InitRabbitMQ init
 func InitRabbitMQ(mqConnName string, connCfg *mqenv.MQConnectorConfig, amqpCfg *AMQPConfig) (*RabbitMQ, error) {
@@ -45,6 +50,11 @@ func GetRabbitMQ(name string) (*RabbitMQ, error) {
 		return amqpInst, nil
 	}
 	return nil, fmt.Errorf("RabbitMQ instance by %s not found", name)
+}
+
+// SetupTrackerQueue name
+func SetupTrackerQueue(queueName string) {
+	trackerQueue = queueName
 }
 
 func dial(amqpURI string) (*amqp.Connection, error) {
@@ -85,7 +95,7 @@ func createChannel(c *amqp.Connection, amqpCfg *AMQPConfig) (*amqp.Channel, erro
 
 func inspectQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, error) {
 	durable := amqpCfg.QueueDurable
-	autoDelete := false
+	autoDelete := amqpCfg.QueueAutoDelete
 	queueName := amqpCfg.Queue
 	if amqpCfg.IsBroadcastExange() {
 		autoDelete = true
@@ -160,7 +170,7 @@ func (r *RabbitMQ) initWithParameters(mqConnName string, connCfg *mqenv.MQConnec
 	r.connecting = false
 	r.queue = nil
 	r.afterEnsureQueue = r.ensurePendings
-	r.rpcName = fmt.Sprintf("@rpc-%s", r.Config.ConnConfigName)
+	r.rpcInstanceName = fmt.Sprintf("@rpc-%s", r.Config.ConnConfigName)
 	r.rpcCallbacks = make(map[string]*mqenv.MQPublishMessage)
 	r.pendingReplies = make(map[string]amqp.Delivery)
 	hostName, err := os.Hostname()
@@ -448,7 +458,7 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 	if nil != r.beforePublish { // specially rpc instance for old version
 		exchangeName, routingKey = r.beforePublish(pm)
 	} else if nil != pm.Response {
-		rpc, err := r.getRPC()
+		rpc, err := r.getRPCInstance()
 		if nil != err {
 			logger.Error.Printf("RabbitMQ %s publish message while get rpc callback instance failed with error:%v", r.Name, err)
 		} else {
@@ -493,6 +503,9 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 	)
 	if "" != pm.CorrelationID {
 		r.answerReplyNeededMessage(pm.CorrelationID)
+		if "" != trackerQueue {
+			r.publishTrackerMQMessage(pm, strconv.Itoa(int(mqenv.MQTypePublisher)))
+		}
 	}
 	if nil != pm.PublishStatus {
 		status := mqenv.MQEvent{
@@ -563,12 +576,12 @@ func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliver
 	r.Done <- fmt.Errorf("error: deliveries channel closed")
 }
 
-func (r *RabbitMQ) getRPC() (*RabbitMQ, error) {
+func (r *RabbitMQ) getRPCInstance() (*RabbitMQ, error) {
 	if nil == r.ConnConfig || nil == r.Config {
 		logger.Error.Printf("%s rabbitmq instance get RPC instance failed that connection configuration empty", r.Name)
 		return nil, fmt.Errorf("connection configuration nil")
 	}
-	rpcInst, ok := amqpInsts[r.rpcName]
+	rpcInst, ok := amqpInsts[r.rpcInstanceName]
 	if ok {
 		return rpcInst, nil
 	}
@@ -581,8 +594,9 @@ func (r *RabbitMQ) getRPC() (*RabbitMQ, error) {
 		QueueDurable:    false,
 		BindingExchange: false,
 		BindingKey:      "",
+		QueueAutoDelete: true,
 	}
-	rpcInst = NewRabbitMQ(r.rpcName, r.ConnConfig, config)
+	rpcInst = NewRabbitMQ(r.rpcInstanceName, r.ConnConfig, config)
 	err := rpcInst.init()
 	if err == nil {
 		queue, err := inspectQueue(r.Channel, config)
@@ -610,7 +624,7 @@ func (r *RabbitMQ) getRPC() (*RabbitMQ, error) {
 	if nil != err {
 		logger.Error.Printf("%s consume rpc failed with error:%v", rpcInst.Name, err)
 	}
-	amqpInsts[r.rpcName] = rpcInst
+	amqpInsts[r.rpcInstanceName] = rpcInst
 	return rpcInst, nil
 }
 
@@ -636,25 +650,13 @@ func (r *RabbitMQ) handleConsumeCallback(d amqp.Delivery, cb AMQPConsumerCallbac
 			if nil != resp {
 				if false == r.isReplyNeededMessageAnswered(d.CorrelationId) {
 					// publish response
-					headers := map[string]string{}
-					if nil != d.Headers {
-						for k, v := range d.Headers {
-							headers[k] = utils.ToString(v)
-						}
-					}
-					pub := &mqenv.MQPublishMessage{
-						Body:          resp,
-						RoutingKey:    d.ReplyTo,
-						CorrelationID: d.CorrelationId,
-						ReplyTo:       d.ReplyTo,
-						MessageID:     d.MessageId,
-						AppID:         d.AppId,
-						UserID:        d.UserId,
-						ContentType:   d.ContentType,
-						Headers:       headers,
-					}
+					pub := r.generatePublishMessageByDelivery(&d, d.ReplyTo, resp)
 					r.publish(pub)
 				}
+			}
+			if "" != trackerQueue {
+				cmsg := r.generatePublishMessageByDelivery(&d, trackerQueue, []byte{})
+				r.publishTrackerMQMessage(cmsg, strconv.Itoa(int(mqenv.MQTypeConsumer)))
 			}
 		} else {
 			cb(d)
@@ -741,6 +743,63 @@ func (r *RabbitMQ) isReplyNeededMessageAnswered(correlationID string) bool {
 	}
 	_, exists := r.pendingReplies[correlationID]
 	return false == exists
+}
+
+func (r *RabbitMQ) publishTrackerMQMessage(pm *mqenv.MQPublishMessage, typ string) {
+	if "" == trackerQueue || nil == r.Channel {
+		return
+	}
+	headers := amqp.Table{}
+	for k, v := range pm.Headers {
+		headers[k] = v
+	}
+	headers["ReplyTo"] = pm.ReplyTo
+	headers["Type"] = typ
+	err := r.Channel.Publish(
+		"",           // publish to an exchange
+		trackerQueue, // routing to 0 or more queues
+		false,        // mandatory
+		false,        // immediate
+		amqp.Publishing{
+			Headers:         headers,
+			ContentType:     pm.ContentType,
+			ContentEncoding: "",
+			Body:            []byte{},
+			CorrelationId:   pm.CorrelationID,
+			ReplyTo:         "",
+			MessageId:       pm.MessageID,
+			AppId:           pm.AppID,
+			UserId:          pm.UserID,
+			Timestamp:       time.Now(),
+			DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
+			Priority:        0,              // 0-9
+			// a bunch of application/implementation-specific fields
+		},
+	)
+	if nil != err {
+		logger.Error.Printf("publish tracker message(%s) to %s failed with error:%v", pm.CorrelationID, trackerQueue, err)
+	}
+}
+
+func (r *RabbitMQ) generatePublishMessageByDelivery(d *amqp.Delivery, queueName string, body []byte) *mqenv.MQPublishMessage {
+	headers := map[string]string{}
+	if nil != d.Headers {
+		for k, v := range d.Headers {
+			headers[k] = utils.ToString(v)
+		}
+	}
+	pub := &mqenv.MQPublishMessage{
+		Body:          body,
+		RoutingKey:    queueName,
+		CorrelationID: d.CorrelationId,
+		ReplyTo:       d.ReplyTo,
+		MessageID:     d.MessageId,
+		AppID:         d.AppId,
+		UserID:        d.UserId,
+		ContentType:   d.ContentType,
+		Headers:       headers,
+	}
+	return pub
 }
 
 // GenerateRabbitMQConsumerProxy generate rabbitmq consumer proxy

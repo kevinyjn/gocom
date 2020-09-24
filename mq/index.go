@@ -216,3 +216,10 @@ func QueryMQRPC(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsume
 	}
 	return nil, fmt.Errorf("Query RPC MQ not supported driver:%s", mqDriver)
 }
+
+// SetupTrackerQueue name
+func SetupTrackerQueue(queueName string) {
+	// rabbitmq
+	rabbitmq.SetupTrackerQueue(queueName)
+	// kafka ...
+}

@@ -23,6 +23,7 @@ type AMQPConfig struct {
 	ExchangeName    string
 	ExchangeType    string
 	BindingKey      string
+	QueueAutoDelete bool
 }
 
 // RabbitConsumerProxy consumer proxy
@@ -73,7 +74,7 @@ type RabbitMQ struct {
 	afterEnsureQueue func()
 	beforePublish    func(*mqenv.MQPublishMessage) (string, string)
 	hostName         string
-	rpcName          string
+	rpcInstanceName  string
 	rpcCallbacks     map[string]*mqenv.MQPublishMessage
 	pendingReplies   map[string]amqp.Delivery
 }

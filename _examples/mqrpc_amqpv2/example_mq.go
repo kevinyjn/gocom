@@ -15,6 +15,7 @@ import (
 func InitServiceHandler(app *iris.Application) error {
 	app.Get("/test", testPublishWebMessage)
 
+	mq.SetupTrackerQueue("tracker.example")
 	env := config.GetEnv()
 	mqCfg := env.MQs["default"]
 	mqTopic := "biz-consumer"
