@@ -1,6 +1,9 @@
 package logger
 
 import (
+	"archive/zip"
+	"bytes"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -10,7 +13,14 @@ import (
 	"github.com/kataras/iris/middleware/logger"
 )
 
-const deleteFileOnExit = false
+// Constants
+const (
+	deleteFileOnExit = false
+
+	AccessLogFileSize20M  int64 = 20 * 1024 * 1024
+	AccessLogFileSize50M  int64 = 50 * 1024 * 1024
+	AccessLogFileSize200M int64 = 200 * 1024 * 1024
+)
 
 func todayFilename() string {
 	// today := time.Now().Format("20060102")
@@ -18,7 +28,7 @@ func todayFilename() string {
 	return "../log/access.log"
 }
 
-func newLogFile() *os.File {
+func newAccessLogFile() *os.File {
 	logPath := todayFilename()
 	logDir, _ := path.Split(logPath)
 	if logDir != "" {
@@ -32,35 +42,47 @@ func newLogFile() *os.File {
 	return f
 }
 
-var excludeExtensions = [...]string{
-	".js",
-	".css",
-	".jpg",
-	".png",
-	".ico",
-	".svg",
-}
+// Variables
+var (
+	excludeExtensions = [...]string{
+		".js",
+		".css",
+		".jpg",
+		".png",
+		".ico",
+		".svg",
+	}
+
+	accessLogFile         *os.File = nil
+	lastAccessLogStatTime time.Time
+	AccessLogFileMaxBytes = AccessLogFileSize20M
+)
 
 // NewAccessLogger logger
-func NewAccessLogger() (h iris.Handler, close func() error) {
+func NewAccessLogger() (h iris.Handler, closer func() error) {
 	c := logger.Config{
 		Status:  true,
 		IP:      true,
 		Method:  true,
 		Path:    true,
-		Columns: true,
+		Query:   true,
+		Columns: false,
 	}
-	logFile := newLogFile()
-	close = func() error {
-		err := logFile.Close()
+	accessLogFile = newAccessLogFile()
+	checkAccessLogRotate(time.Now())
+	closer = func() error {
+		err := accessLogFile.Close()
 		if deleteFileOnExit {
-			err = os.Remove(logFile.Name())
+			err = os.Remove(accessLogFile.Name())
 		}
 		return err
 	}
 	c.LogFunc = func(now time.Time, latency time.Duration, status, ip, method, path string, message interface{}, headerMessage interface{}) {
 		output := logger.Columnize(now.Format("2006/01/02T15:04:05"), latency, status, ip, method, path, message, headerMessage)
-		logFile.Write([]byte(output))
+		checkAccessLogRotate(now)
+		if nil != accessLogFile {
+			accessLogFile.WriteString(output)
+		}
 	}
 	//我们不想使用记录器，一些静态请求等
 	c.AddSkipper(func(ctx iris.Context) bool {
@@ -73,5 +95,64 @@ func NewAccessLogger() (h iris.Handler, close func() error) {
 		return false
 	})
 	h = logger.New(c)
-	return
+	return h, closer
+}
+
+func checkAccessLogRotate(now time.Time) {
+	if AccessLogFileMaxBytes > 0 && now.Sub(lastAccessLogStatTime).Seconds() > 300 {
+		lastAccessLogStatTime = now
+		stat, err := accessLogFile.Stat()
+		if nil == err {
+			if stat.Size() > AccessLogFileMaxBytes {
+				// rotate log
+				accessLogFile, err = archiveAndNewLogFile(accessLogFile)
+			}
+		}
+	}
+}
+
+func archiveAndNewLogFile(lf *os.File) (*os.File, error) {
+	buf := new(bytes.Buffer)
+	w := zip.NewWriter(buf)
+	fbasename := path.Base(lf.Name())
+	fname := lf.Name()
+	f, err := w.Create(fbasename)
+	for {
+		if nil != err {
+			w.Close()
+			Error.Printf("archive access log file while create zip element file:%s failed with error:%v", fbasename, err)
+			break
+		}
+
+		lf.Close()
+		fbuf, err := ioutil.ReadFile(fname)
+		if nil == err {
+			_, err = f.Write(fbuf)
+			if nil != err {
+				Error.Printf("archive access log file:%s.gz while write zip buffer failed with error:%v", fname, err)
+			}
+		} else {
+			Error.Printf("archive access log file:%s.gz while read origin file %s failed with error:%v", fname, fname, err)
+		}
+		if w.Close() == nil {
+			zf, err := os.OpenFile(fname+".gz", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+			if nil == err {
+				_, err = buf.WriteTo(zf)
+				if nil != err {
+					Error.Printf("archive access log file:%s.gz while create file failed with error:%v", fname, err)
+				}
+				zf.Close()
+			} else {
+				Error.Printf("archive access log file:%s.gz while create file failed with error:%v", fname, err)
+			}
+		}
+		break
+	}
+	os.Remove(fname)
+	newFile, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if nil != err {
+		Error.Printf("archived access log file:%s.gz and recreate access log file:%s failed with error:%v", fname, fname, err)
+	}
+
+	return newFile, err
 }
