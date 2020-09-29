@@ -47,7 +47,7 @@ type RabbitQueueStatus struct {
 }
 
 // AMQPConsumerCallback callback
-type AMQPConsumerCallback func(amqp.Delivery) []byte
+type AMQPConsumerCallback func(amqp.Delivery) *mqenv.MQPublishMessage
 
 // RabbitMQ instance
 type RabbitMQ struct {

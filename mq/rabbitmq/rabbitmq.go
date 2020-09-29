@@ -650,8 +650,8 @@ func (r *RabbitMQ) handleConsumeCallback(d amqp.Delivery, cb AMQPConsumerCallbac
 			if nil != resp {
 				if false == r.isReplyNeededMessageAnswered(d.CorrelationId) {
 					// publish response
-					pub := r.generatePublishMessageByDelivery(&d, d.ReplyTo, resp)
-					r.publish(pub)
+					resp.ReplyTo = d.ReplyTo
+					r.publish(resp)
 				}
 			}
 			if "" != trackerQueue {
@@ -697,7 +697,7 @@ func (r *RabbitMQ) QueryRPC(pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMessag
 	return resp, err
 }
 
-func (r *RabbitMQ) handleRPCCallback(d amqp.Delivery) []byte {
+func (r *RabbitMQ) handleRPCCallback(d amqp.Delivery) *mqenv.MQPublishMessage {
 	if nil == r.rpcCallbacks {
 		return nil
 	}
@@ -804,7 +804,7 @@ func (r *RabbitMQ) generatePublishMessageByDelivery(d *amqp.Delivery, queueName 
 
 // GenerateRabbitMQConsumerProxy generate rabbitmq consumer proxy
 func GenerateRabbitMQConsumerProxy(consumeProxy *mqenv.MQConsumerProxy) *RabbitConsumerProxy {
-	cb := func(d amqp.Delivery) []byte {
+	cb := func(d amqp.Delivery) *mqenv.MQPublishMessage {
 		msg := generateMQResponseMessage(&d)
 		if nil != consumeProxy.Callback {
 			return consumeProxy.Callback(msg)

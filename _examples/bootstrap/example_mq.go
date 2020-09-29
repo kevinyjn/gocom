@@ -41,7 +41,7 @@ func InitServiceHandler() error {
 	return nil
 }
 
-func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) []byte {
+func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
 	fmt.Println("handling mq service response message...")
 	return nil
 }

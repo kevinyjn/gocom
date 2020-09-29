@@ -1,6 +1,11 @@
 package mqenv
 
-import "time"
+import (
+	"time"
+
+	"github.com/kevinyjn/gocom/utils"
+	"github.com/streadway/amqp"
+)
 
 // Constants
 const (
@@ -71,7 +76,7 @@ type MQPublishMessage struct {
 }
 
 // MQConsumerCallback callback
-type MQConsumerCallback func(MQConsumerMessage) []byte
+type MQConsumerCallback func(MQConsumerMessage) *MQPublishMessage
 
 // MQConsumerProxy consumer proxy
 type MQConsumerProxy struct {
@@ -94,4 +99,29 @@ func (m *MQPublishMessage) CallbackEnabled() bool {
 	return false == m.callbackDisabled
 }
 
-//
+// NewMQResponseMessage new mq response publish messge depends on mq consumer message
+func NewMQResponseMessage(body []byte, cm *MQConsumerMessage) *MQPublishMessage {
+	pm := &MQPublishMessage{
+		Body:    body,
+		Headers: map[string]string{},
+	}
+	if nil != cm {
+		pm.AppID = cm.AppID
+		pm.RoutingKey = cm.ReplyTo
+		pm.CorrelationID = cm.CorrelationID
+		pm.ReplyTo = cm.ReplyTo
+		pm.MessageID = cm.MessageID
+		pm.AppID = cm.MessageID
+		pm.UserID = cm.UserID
+		pm.ContentType = cm.ContentType
+		if nil != cm.BindData {
+			hdrs, ok := cm.BindData.(*amqp.Delivery)
+			if ok && nil != hdrs {
+				for k, v := range hdrs.Headers {
+					pm.Headers[k] = utils.ToString(v)
+				}
+			}
+		}
+	}
+	return pm
+}

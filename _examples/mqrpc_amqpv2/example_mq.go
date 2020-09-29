@@ -13,7 +13,7 @@ import (
 
 // InitServiceHandler initialize
 func InitServiceHandler(app *iris.Application) error {
-	app.Get("/test", testPublishWebMessage)
+	app.Get("/publish", testPublishWebMessage)
 
 	mq.SetupTrackerQueue("tracker.example")
 	env := config.GetEnv()
@@ -88,24 +88,26 @@ func getDemoMQConfig() *mq.Config {
 	return o
 }
 
-func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) []byte {
-	fmt.Printf("handling mq service response message ... %+v\n", mqMsg)
-	body := string(mqMsg.Body)
+func handleMQServiceMessage(cm mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
+	fmt.Printf("handling mq service response message ... %+v\n", cm)
+	body := string(cm.Body)
 	pm := &mqenv.MQPublishMessage{
 		Body: []byte("2. " + body),
 	}
 	resp, err := mq.QueryMQRPC("stage2", pm)
 	if nil != err {
 		fmt.Printf("WARNING: query biz producer failed with error:%v\n", err)
-		return []byte(err.Error())
+		return mq.NewMQResponseMessage([]byte(err.Error()), &cm)
 	}
 	fmt.Printf("Got stage1 response %s %s : %s\n", resp.CorrelationID, resp.ReplyTo, resp.Body)
-	return resp.Body
+	response := mq.NewMQResponseMessage(resp.Body, &cm)
+	return response
 }
 
-func handleMQServiceMessage2(mqMsg mqenv.MQConsumerMessage) []byte {
-	fmt.Printf("handling mq service response message stage 2 ... %+v\n", mqMsg)
-	return []byte(fmt.Sprintf("Response: %s", string(mqMsg.Body)))
+func handleMQServiceMessage2(cm mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
+	fmt.Printf("handling mq service response message stage 2 ... %+v\n", cm)
+	response := mq.NewMQResponseMessage([]byte(fmt.Sprintf("Response: %s", string(cm.Body))), &cm)
+	return response
 }
 
 func testPublishRPCMessage() {

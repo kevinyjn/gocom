@@ -223,3 +223,8 @@ func SetupTrackerQueue(queueName string) {
 	rabbitmq.SetupTrackerQueue(queueName)
 	// kafka ...
 }
+
+// NewMQResponseMessage new mq response publish messge depends on mq consumer message
+func NewMQResponseMessage(body []byte, cm *mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
+	return mqenv.NewMQResponseMessage(body, cm)
+}

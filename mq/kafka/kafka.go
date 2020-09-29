@@ -345,7 +345,7 @@ func (r *Kafka) Stats() Stats {
 
 // GenerateKafkaConsumerProxy geenrate kafak consumer proxy
 func GenerateKafkaConsumerProxy(consumeProxy *mqenv.MQConsumerProxy) *ConsumerProxy {
-	cb := func(msg ConsumerMessage) {
+	cb := func(msg ConsumerMessage) *mqenv.MQPublishMessage {
 		mqMsg := mqenv.MQConsumerMessage{
 			Driver:        mqenv.DriverTypeKafka,
 			Queue:         msg.Topic,
@@ -360,6 +360,7 @@ func GenerateKafkaConsumerProxy(consumeProxy *mqenv.MQConsumerProxy) *ConsumerPr
 		if nil != consumeProxy.Callback {
 			consumeProxy.Callback(mqMsg)
 		}
+		return nil
 	}
 	pxy := ConsumerProxy{
 		Topic:       consumeProxy.Queue,

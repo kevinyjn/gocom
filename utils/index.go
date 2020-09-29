@@ -26,6 +26,12 @@ const (
 	CharactorsBase = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
 
+// local variables
+var (
+	_random           = rand.New(rand.NewSource(time.Now().UnixNano()))
+	_cachedDigistsMap = map[string]map[byte]int{}
+)
+
 // ToString convert to string
 func ToString(val interface{}) string {
 	if val == nil {
@@ -465,17 +471,19 @@ func IsObjectEquals(l interface{}, r interface{}) bool {
 
 // RandomString random string
 func RandomString(l int) string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	str := []byte(CharactorsBase)
 	sl := len(str)
 	result := []byte{}
 	for i := 0; i < l; i++ {
-		result = append(result, str[r.Intn(sl)])
+		result = append(result, str[_random.Intn(sl)])
 	}
 	return string(result)
 }
 
-var _cachedDigistsMap = map[string]map[byte]int{}
+// RandomInt random int
+func RandomInt(n int) int {
+	return _random.Intn(n)
+}
 
 // GetDigistIndex get digist index
 func GetDigistIndex(digists string, c byte) int {
@@ -518,7 +526,7 @@ func IncreaseValueCustomizedDigist(val string, digists string) string {
 func GenUUID() string {
 	unix32bits := uint32(time.Now().UTC().Unix())
 	buff := make([]byte, 12)
-	numRead, err := rand.Read(buff)
+	numRead, err := _random.Read(buff)
 	if numRead != len(buff) || err != nil {
 		return ""
 	}
@@ -527,7 +535,13 @@ func GenUUID() string {
 
 // GenLoweruuid generate uuid with lower characters
 func GenLoweruuid() string {
-	return strings.ToLower(GenUUID())
+	unix32bits := uint32(time.Now().UTC().Unix())
+	buff := make([]byte, 12)
+	numRead, err := _random.Read(buff)
+	if numRead != len(buff) || err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x-%x", unix32bits, buff[0:2], buff[2:4], buff[4:6], buff[6:8], buff[8:])
 }
 
 // GetLastPartString get last slice of the text

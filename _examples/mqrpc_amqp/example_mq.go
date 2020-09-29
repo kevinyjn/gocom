@@ -90,7 +90,7 @@ func getDemoMQConfig() *mq.Config {
 	return o
 }
 
-func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) []byte {
+func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
 	fmt.Println("handling mq service response message...", mqMsg)
 	mqTopic := "rpc-consumer"
 	pubMsg := mqenv.MQPublishMessage{

@@ -442,7 +442,7 @@ func RegisterGraphQLRoutes(app router.Party, beans []interface{}) error {
 	return nil
 }
 
-func handlerMQGraphQLMessage(m mqenv.MQConsumerMessage) []byte {
+func handlerMQGraphQLMessage(m mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
 	routeName := m.RoutingKey
 	lastIdx := strings.LastIndex(routeName, ".")
 	if lastIdx >= 0 {

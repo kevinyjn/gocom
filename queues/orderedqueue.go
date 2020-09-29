@@ -1,8 +1,8 @@
 package queues
 
 import (
-	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -15,32 +15,6 @@ const (
 	OrderingDesc = OrderingMode(1)
 )
 
-// demoElement demo element
-type demoElement struct {
-	val      string
-	ordering int64
-}
-
-// GetID get id
-func (e *demoElement) GetID() string {
-	return e.val
-}
-
-// GetName get name
-func (e *demoElement) GetName() string {
-	return e.val
-}
-
-// OrderingValue get expire time
-func (e *demoElement) OrderingValue() int64 {
-	return e.ordering
-}
-
-// DebugString text
-func (e *demoElement) DebugString() string {
-	return e.val
-}
-
 // UnixTimestampToTime convert unix timestamp in seconds to time.Time
 func UnixTimestampToTime(secs int64) time.Time {
 	return time.Unix(secs, 0)
@@ -50,6 +24,7 @@ func UnixTimestampToTime(secs int64) time.Time {
 type OrderedQueue struct {
 	queue    []IElement
 	ordering OrderingMode
+	m        sync.RWMutex
 }
 
 // NewAscOrderingQueue new queue ordered by ascending
@@ -57,6 +32,7 @@ func NewAscOrderingQueue() *OrderedQueue {
 	return &OrderedQueue{
 		queue:    []IElement{},
 		ordering: OrderingAsc,
+		m:        sync.RWMutex{},
 	}
 }
 
@@ -65,12 +41,16 @@ func NewDescOrderingQueue() *OrderedQueue {
 	return &OrderedQueue{
 		queue:    []IElement{},
 		ordering: OrderingDesc,
+		m:        sync.RWMutex{},
 	}
 }
 
 // Add element depending on ordered queue ordering mode
 func (q *OrderedQueue) Add(item IElement) *OrderedQueue {
-	q.queue = pushItemToOrderedQueue(&q.queue, len(q.queue), item, q.ordering)
+	q.m.Lock()
+	ql := len(q.queue)
+	q.queue = pushItemToOrderedQueue(&q.queue, ql, item, q.ordering)
+	q.m.Unlock()
 	return q
 }
 
@@ -80,30 +60,26 @@ func (q *OrderedQueue) Push(item IElement) bool {
 	return true
 }
 
-// Queue get all queue data
-func (q *OrderedQueue) Queue() []IElement {
-	if nil == q.queue {
-		q.queue = []IElement{}
-	}
-	return q.queue
-}
-
 // Pop first item
 func (q *OrderedQueue) Pop() (interface{}, bool) {
-	if len(q.queue) <= 0 {
+	if q.GetSize() <= 0 {
 		return nil, false
 	}
+	q.m.Lock()
 	item := q.queue[0]
 	q.queue = append([]IElement{}, q.queue[1:]...)
+	q.m.Unlock()
 	return item, true
 }
 
 // First item without pop
 func (q *OrderedQueue) First() (interface{}, bool) {
-	if len(q.queue) <= 0 {
+	if q.GetSize() <= 0 {
 		return nil, false
 	}
+	q.m.RLock()
 	item := q.queue[0]
+	q.m.RUnlock()
 	return item, true
 }
 
@@ -114,22 +90,18 @@ func (q *OrderedQueue) Remove(item IElement) bool {
 	if 0 > idx {
 		return false
 	}
-
+	q.m.Lock()
 	q.queue = append(q.queue[0:idx], q.queue[idx+1:]...)
+	q.m.Unlock()
 	return true
-	// for i, e := range q.queue {
-	// 	if e.GetID() == item.GetID() {
-	// 		// fmt.Printf("Removing element on index:%d depend on id:%s\n", i, item.GetID())
-	// 		q.queue = append(q.queue[0:i], q.queue[i+1:]...)
-	// 		return true
-	// 	}
-	// }
-	// return false
 }
 
 // Elements of all queue
 func (q *OrderedQueue) Elements() []IElement {
-	return q.queue
+	q.m.RLock()
+	elements := append([]IElement{}, q.queue...)
+	q.m.RUnlock()
+	return elements
 }
 
 // GetOne an element from queue identified by element.GetID()
@@ -149,10 +121,11 @@ func (q *OrderedQueue) GetOne(item IElement) (interface{}, bool) {
 }
 
 func (q *OrderedQueue) findElementIndex(item IElement) int {
-	l := len(q.queue)
+	l := q.GetSize()
 	if 0 >= l {
 		return -1
 	}
+	q.m.Lock()
 	idx := findOrderedQueueInsertingIndex(&q.queue, l, item, q.ordering)
 	cursor := idx
 	max := idx + 2
@@ -165,6 +138,7 @@ func (q *OrderedQueue) findElementIndex(item IElement) int {
 	}
 	for cursor < max {
 		if item.GetID() == q.queue[cursor].GetID() {
+			q.m.Unlock()
 			return cursor
 		}
 		cursor++
@@ -172,10 +146,12 @@ func (q *OrderedQueue) findElementIndex(item IElement) int {
 	cursor = idx - 1
 	for cursor > min {
 		if item.GetID() == q.queue[cursor].GetID() {
+			q.m.Unlock()
 			return cursor
 		}
 		cursor--
 	}
+	q.m.Unlock()
 	return -1
 }
 
@@ -202,28 +178,44 @@ func (q *OrderedQueue) Dump() string {
 func (q *OrderedQueue) CutBefore(idx int) []IElement {
 	if 0 > idx {
 		return []IElement{}
-	} else if len(q.queue) >= idx {
+	} else if q.GetSize() >= idx {
+		q.m.Lock()
 		cuts := q.queue
 		q.queue = []IElement{}
+		q.m.Unlock()
 		return cuts
 	}
+	q.m.Lock()
 	cuts := q.queue[:idx]
 	q.queue = q.queue[idx:]
+	q.m.Unlock()
 	return cuts
 }
 
 // CutAfter cut elements out after index
 func (q *OrderedQueue) CutAfter(idx int) []IElement {
 	if 0 > idx {
+		q.m.Lock()
 		cuts := q.queue
 		q.queue = []IElement{}
+		q.m.Unlock()
 		return cuts
-	} else if len(q.queue) >= idx {
+	} else if q.GetSize() >= idx {
 		return []IElement{}
 	}
+	q.m.Lock()
 	cuts := q.queue[idx+1:]
 	q.queue = q.queue[:idx+1]
+	q.m.Unlock()
 	return cuts
+}
+
+// GetSize of queue
+func (q *OrderedQueue) GetSize() int {
+	q.m.RLock()
+	n := len(q.queue)
+	q.m.RUnlock()
+	return n
 }
 
 // pushItemToOrderedQueue 依据排序顺序新元素插入到已有队列中
@@ -285,32 +277,4 @@ func checkInsertBefore(e1, e2 IElement, ordering OrderingMode) bool {
 		return e1.OrderingValue() > e2.OrderingValue()
 	}
 	return e1.OrderingValue() < e2.OrderingValue()
-}
-
-// UnitestOrderedQueue test
-func UnitestOrderedQueue() error {
-	queue1 := &OrderedQueue{}
-	queue2 := NewDescOrderingQueue()
-	items := []*demoElement{
-		{val: "3", ordering: 3},
-		{val: "5", ordering: 5},
-		{val: "2", ordering: 2},
-		{val: "9", ordering: 9},
-		{val: "6", ordering: 6},
-		{val: "7", ordering: 7},
-		{val: "1", ordering: 1},
-		{val: "10", ordering: 10},
-		{val: "8", ordering: 8},
-		{val: "4", ordering: 4},
-	}
-
-	for _, e := range items {
-		queue1.Add(e)
-		queue2.Add(e)
-	}
-	queue1.Remove(&demoElement{val: "10", ordering: 10})
-	fmt.Println("Testing... asceding queue  ->", queue1.Dump())
-	fmt.Println("Testing... desceding queue ->", queue2.Dump())
-
-	return nil
 }
