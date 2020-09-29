@@ -81,7 +81,7 @@ func ToString(val interface{}) string {
 			bs, err = json.Marshal(&val)
 		}
 		break
-	case reflect.Array, reflect.Map:
+	case reflect.Array, reflect.Map, reflect.Slice:
 		bs, err = json.Marshal(val)
 		break
 	}
