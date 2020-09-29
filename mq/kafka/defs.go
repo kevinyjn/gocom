@@ -43,7 +43,7 @@ type ConsumerMessage struct {
 }
 
 // ConsumerCallback callback
-type ConsumerCallback func(ConsumerMessage)
+type ConsumerCallback func(ConsumerMessage) *mqenv.MQPublishMessage
 
 // PublishingMsg publishing msg
 type PublishingMsg struct {

@@ -358,7 +358,7 @@ func GenerateKafkaConsumerProxy(consumeProxy *mqenv.MQConsumerProxy) *ConsumerPr
 		}
 
 		if nil != consumeProxy.Callback {
-			consumeProxy.Callback(mqMsg)
+			return consumeProxy.Callback(mqMsg)
 		}
 		return nil
 	}
