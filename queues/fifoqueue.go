@@ -3,6 +3,8 @@ package queues
 import (
 	"strings"
 	"sync"
+
+	"github.com/kevinyjn/gocom/definations"
 )
 
 // FIFOQueue queue
@@ -100,6 +102,22 @@ func (q *FIFOQueue) GetOne(item IElement) (interface{}, bool) {
 	}
 	q.m.RUnlock()
 	return nil, false
+}
+
+// FindElements by compaire condition
+func (q *FIFOQueue) FindElements(cmp *definations.ComparisonObject) []IElement {
+	elements := []IElement{}
+	if nil == cmp {
+		return elements
+	}
+	q.m.RLock()
+	for _, e := range q.queue {
+		if cmp.Evaluate(e) {
+			elements = append(elements, e)
+		}
+	}
+	q.m.RUnlock()
+	return elements
 }
 
 // GetElement get element by id

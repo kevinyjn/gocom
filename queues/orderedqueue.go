@@ -4,6 +4,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kevinyjn/gocom/definations"
 )
 
 // OrderingMode type
@@ -120,12 +122,29 @@ func (q *OrderedQueue) GetOne(item IElement) (interface{}, bool) {
 	// return nil, false
 }
 
+// FindElements by compaire condition
+func (q *OrderedQueue) FindElements(cmp *definations.ComparisonObject) []IElement {
+	elements := []IElement{}
+	if nil == cmp {
+		return elements
+	}
+	q.m.RLock()
+	for _, e := range q.queue {
+		if cmp.Evaluate(e) {
+			elements = append(elements, e)
+		}
+	}
+	q.m.RUnlock()
+	return elements
+}
+
 func (q *OrderedQueue) findElementIndex(item IElement) int {
-	l := q.GetSize()
+	q.m.Lock()
+	l := len(q.queue)
 	if 0 >= l {
+		q.m.Unlock()
 		return -1
 	}
-	q.m.Lock()
 	idx := findOrderedQueueInsertingIndex(&q.queue, l, item, q.ordering)
 	cursor := idx
 	max := idx + 2
@@ -157,20 +176,25 @@ func (q *OrderedQueue) findElementIndex(item IElement) int {
 
 // GetElement get element by id
 func (q *OrderedQueue) GetElement(ID string) (interface{}, bool) {
+	q.m.RLock()
 	for _, e := range q.queue {
 		if e.GetID() == ID {
+			q.m.RUnlock()
 			return e, true
 		}
 	}
+	q.m.RUnlock()
 	return nil, false
 }
 
 // Dump element in queue
 func (q *OrderedQueue) Dump() string {
 	result := []string{}
+	q.m.RLock()
 	for _, e := range q.queue {
 		result = append(result, e.DebugString())
 	}
+	q.m.RUnlock()
 	return strings.Join(result, ", \n")
 }
 

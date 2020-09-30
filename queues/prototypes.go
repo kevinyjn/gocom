@@ -1,5 +1,7 @@
 package queues
 
+import "github.com/kevinyjn/gocom/definations"
+
 // IElement queue element
 type IElement interface {
 	GetID() string
@@ -22,6 +24,8 @@ type IQueue interface {
 	Remove(IElement) bool
 	// Elements of all queue
 	Elements() []IElement
+	// FindElements by compaire condition
+	FindElements(*definations.ComparisonObject) []IElement
 	//Dump all elements from queue
 	Dump() string
 	// GetElement
