@@ -73,6 +73,7 @@ type MQPublishMessage struct {
 	Response         chan MQConsumerMessage `json:"-"`
 	TimeoutSeconds   int
 	callbackDisabled bool
+	SkipExchange     bool // if publish a message only to a queue, not bind to exchange
 }
 
 // MQConsumerCallback callback

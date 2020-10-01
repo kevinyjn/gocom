@@ -465,7 +465,7 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 			rpc.ensureRPCMessage(pm)
 		}
 	}
-	if "" != pm.CorrelationID && false == r.isReplyNeededMessageAnswered(pm.CorrelationID) {
+	if pm.SkipExchange || ("" != pm.CorrelationID && false == r.isReplyNeededMessageAnswered(pm.CorrelationID)) {
 		exchangeName = ""
 	}
 	if "" == routingKey {
