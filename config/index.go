@@ -69,7 +69,7 @@ type Env struct {
 	RestfulLoader RestfulLoader                              `yaml:"restLoader"`
 	Proxies       *definations.Proxies                       `yaml:"proxies"`
 	HealthzChecks []HealthzChecks                            `yaml:"healthzChecks"`
-	Extends       map[string]interface{}                     `yaml:"extends"`
+	Extends       map[string][]map[string]string             `yaml:"extends"`
 }
 
 var env = Env{}
