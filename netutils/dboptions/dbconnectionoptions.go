@@ -245,7 +245,7 @@ func (o *DBConnectionPoolOptions) GetConnectionData() (DBConnectionData, error) 
 	case EngineMSSQL:
 		connData.Driver = "sqlserver"
 		connData.ConnString = fmt.Sprintf("server=%s;user id=%s;password=%s;port=%d;database=%s;encrypt=disable", dbHost, o.User, o.Password, dbPort, o.Database)
-		connData.ConnDescription = fmt.Sprintf("mssql://%s@%s:%d/%s", o.User, o.Host, o.Port, o.Database)
+		connData.ConnDescription = fmt.Sprintf("mssql://%s:%s@%s:%d/%s", o.User, strings.Repeat("*", len(o.Password)), o.Host, o.Port, o.Database)
 		break
 	case EngineMySQL, EngineTiDB:
 		connData.Driver = "mysql"
@@ -256,24 +256,26 @@ func (o *DBConnectionPoolOptions) GetConnectionData() (DBConnectionData, error) 
 		cfg.Addr = fmt.Sprintf("%s:%d", dbHost, dbPort)
 		cfg.DBName = o.Database
 		connData.ConnString = cfg.FormatDSN()
-		connData.ConnDescription = fmt.Sprintf("mysql://%s:@%s:%d/%s?charset=utf8", o.User, o.Host, o.Port, o.Database)
+		connData.ConnDescription = fmt.Sprintf("mysql://%s:%s@%s:%d/%s?charset=utf8", o.User, strings.Repeat("*", len(o.Password)), o.Host, o.Port, o.Database)
 		break
 	case EngineOracle:
 		connData.Driver = "godror"
+		servicePart := ""
 		if "" != o.ServiceID {
-			connData.ConnString = fmt.Sprintf("%s/%s@%s:%d:%s", utils.URLEncode(o.User), utils.URLEncode(o.Password), dbHost, dbPort, o.ServiceID)
+			servicePart = ":" + o.ServiceID
 		} else {
-			connData.ConnString = fmt.Sprintf("%s/%s@%s:%d/%s", utils.URLEncode(o.User), utils.URLEncode(o.Password), dbHost, dbPort, o.ServiceName)
+			servicePart = "/" + o.ServiceName
 		}
+		connData.ConnString = fmt.Sprintf("%s/%s@%s:%d%s", utils.URLEncode(o.User), utils.URLEncode(o.Password), dbHost, dbPort, servicePart)
 		if "" != o.Database {
 			connData.ConnString = connData.ConnString + "/" + o.Database
 		}
-		connData.ConnDescription = connData.ConnString
+		connData.ConnDescription = fmt.Sprintf("oracle://%s:%s@%s:%d%s/%s", o.User, strings.Repeat("*", len(o.Password)), o.Host, o.Port, servicePart, o.Database)
 		break
 	case EnginePostgres, EngineCockroachDB:
 		connData.Driver = "postgres"
 		connData.ConnString = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s", dbHost, dbPort, o.User, o.Password, o.Database)
-		connData.ConnDescription = fmt.Sprintf("postgres://%s:@%s:%d/%s", o.User, o.Host, o.Port, o.Database)
+		connData.ConnDescription = fmt.Sprintf("postgres://%s:%s@%s:%d/%s", o.User, strings.Repeat("*", len(o.Password)), o.Host, o.Port, o.Database)
 		break
 	case EngineSQLite:
 		connData.Driver = "sqlite3"

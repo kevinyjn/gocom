@@ -11,11 +11,11 @@ type ormLogger struct {
 }
 
 func (l *ormLogger) Debug(v ...interface{}) {
-	logger.Trace.Print(v...)
+	// logger.Debug.Print(v...)
 }
 
 func (l *ormLogger) Debugf(format string, v ...interface{}) {
-	logger.Trace.Printf(format, v...)
+	// logger.Debug.Printf(format, v...)
 }
 func (l *ormLogger) Error(v ...interface{}) {
 	logger.Error.Print(v...)
