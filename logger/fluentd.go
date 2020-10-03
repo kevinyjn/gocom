@@ -1,4 +1,4 @@
-package fluentdlogger
+package logger
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 )
 
 // InitFluentdLogger logger
-func InitFluentdLogger(host string, port int, level int) {
+func InitFluentdLogger(host string, port int, level LogLevel) {
 	cfg := fluent.Config{
 		FluentPort: port,
 		FluentHost: host,

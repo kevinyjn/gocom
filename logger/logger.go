@@ -13,9 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kevinyjn/gocom/logger/fluentdlogger"
 	"github.com/robfig/cron"
 )
+
+// LogLevel type
+type LogLevel int
 
 // Constant
 const (
@@ -30,11 +32,19 @@ const (
 	LogRotatorExpiresWeekly  = 7
 	LogRotatorExpiresSeason  = 90
 	LogRotatorExpiresYearly  = 365
+
+	LogLevelTrace LogLevel = iota
+	LogLevelDebug
+	LogLevelInfo
+	LogLevelWarning
+	LogLevelError
+	LogLevelFatal
 )
 
 // Variables
 var (
 	Trace                 *log.Logger = log.New(os.Stdout, "[TRACE] ", log.Ldate|log.Ltime|log.Lshortfile)
+	Debug                 *log.Logger = log.New(os.Stdout, "[DEBUG] ", log.Ldate|log.Ltime|log.Lshortfile)
 	Info                  *log.Logger = log.New(os.Stdout, "[INFO] ", log.Ldate|log.Ltime|log.Lshortfile)
 	Warning               *log.Logger = log.New(os.Stdout, "[WARN] ", log.Ldate|log.Ltime|log.Lshortfile)
 	Error                 *log.Logger = log.New(io.MultiWriter(os.Stdout, os.Stderr), "[ERROR] ", log.Ldate|log.Ltime|log.Lshortfile)
@@ -44,6 +54,7 @@ var (
 	baseLogFileName       string      = ""
 	rotatorTimer          *cron.Cron  = nil
 	originLogFile         *os.File    = nil
+	Level                 LogLevel    = LogLevelDebug
 )
 
 // Init initializer
@@ -58,31 +69,39 @@ func Init(loggerConfig *Logger) error {
 
 // IsDebugEnabled boolean
 func IsDebugEnabled() bool {
-	if ioutil.Discard == Trace.Writer() {
-		return false
-	}
-	return true
+	return Level <= LogLevelDebug
 }
 
-func convertLogLevel(logLevel string) int {
+func convertLogLevel(logLevel string) LogLevel {
 	logLevel = strings.ToUpper(logLevel)
-	actLogLevel := 1
-	if strings.ToUpper(logLevel) == "INFO" {
-		actLogLevel = 2
-	} else if strings.ToUpper(logLevel) == "WARN" {
-		actLogLevel = 3
-	} else if strings.ToUpper(logLevel) == "ERROR" {
-		actLogLevel = 4
-	} else if strings.ToUpper(logLevel) == "FATAL" {
-		actLogLevel = 5
+	actLogLevel := LogLevelDebug
+	switch strings.ToUpper(logLevel) {
+	case "TRACE":
+		actLogLevel = LogLevelTrace
+		break
+	case "DEBUG":
+		actLogLevel = LogLevelDebug
+		break
+	case "INFO":
+		actLogLevel = LogLevelInfo
+		break
+	case "WARN":
+		actLogLevel = LogLevelWarning
+		break
+	case "ERROR":
+		actLogLevel = LogLevelError
+		break
+	case "FATAL":
+		actLogLevel = LogLevelFatal
+		break
 	}
 	return actLogLevel
 }
 
-func selectIobufferByLevel(file *os.File, level int, limitLevel int) io.Writer {
+func selectIobufferByLevel(file *os.File, level LogLevel, limitLevel LogLevel) io.Writer {
 	if level < limitLevel {
 		return ioutil.Discard
-	} else if level < 5 {
+	} else if level < LogLevelFatal {
 		if file != nil {
 			return file
 		}
@@ -115,6 +134,7 @@ func initFilelog(logPath string, logLevel string) error {
 	}
 
 	actLogLevel := convertLogLevel(logLevel)
+	Level = actLogLevel
 
 	baseLogFileName = logPath
 	file, _, err := generateLogFile(logPath)
@@ -128,11 +148,12 @@ func initFilelog(logPath string, logLevel string) error {
 		loggerFlag += log.Lshortfile
 	}
 
-	Trace = log.New(selectIobufferByLevel(file, 1, actLogLevel), "[TRACE] ", loggerFlag)
-	Info = log.New(selectIobufferByLevel(file, 2, actLogLevel), "[INFO] ", loggerFlag)
-	Warning = log.New(selectIobufferByLevel(file, 3, actLogLevel), "[WARN] ", loggerFlag)
-	Error = log.New(selectIobufferByLevel(file, 4, actLogLevel), "[ERROR] ", loggerFlag)
-	Fatal = log.New(selectIobufferByLevel(file, 5, actLogLevel), "[FATAL] ", loggerFlag)
+	Trace = log.New(selectIobufferByLevel(file, LogLevelTrace, actLogLevel), "[TRACE] ", loggerFlag)
+	Debug = log.New(selectIobufferByLevel(file, LogLevelDebug, actLogLevel), "[DEBUG] ", loggerFlag)
+	Info = log.New(selectIobufferByLevel(file, LogLevelWarning, actLogLevel), "[INFO] ", loggerFlag)
+	Warning = log.New(selectIobufferByLevel(file, LogLevelWarning, actLogLevel), "[WARN] ", loggerFlag)
+	Error = log.New(selectIobufferByLevel(file, LogLevelError, actLogLevel), "[ERROR] ", loggerFlag)
+	Fatal = log.New(selectIobufferByLevel(file, LogLevelFatal, actLogLevel), "[FATAL] ", loggerFlag)
 
 	Info.Printf("logger initialized.")
 	if nil == rotatorTimer {
@@ -157,7 +178,7 @@ func initEfkLogger(logPath string, logLevel string) error {
 	if len(hosts) > 1 {
 		port, _ = strconv.Atoi(hosts[1])
 	}
-	fluentdlogger.InitFluentdLogger(hosts[0], port, actLogLevel)
+	InitFluentdLogger(hosts[0], port, actLogLevel)
 	return nil
 }
 
@@ -171,6 +192,7 @@ func logRotator() {
 		return
 	}
 	Trace.SetOutput(file)
+	Debug.SetOutput(file)
 	Info.SetOutput(file)
 	Warning.SetOutput(file)
 	Error.SetOutput(file)

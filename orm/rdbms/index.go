@@ -107,6 +107,7 @@ func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 		logger.Error.Printf("New database connection engine with driver:%s and address:%s failed with error:%v", connData.Driver, connData.ConnDescription, err)
 		return nil, err
 	}
+	orm.SetLogger(&ormLogger{logLevel: getSysLogLevel(), showSQL: logger.IsDebugEnabled()})
 	orm.TZLocation = time.Local
 	orm.DatabaseTZ = time.Local
 
