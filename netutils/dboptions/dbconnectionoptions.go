@@ -37,16 +37,17 @@ const (
 // DBConnectionPoolOptions options
 type DBConnectionPoolOptions struct {
 	Engine              int
-	Host                string `property:"Database Host"`
-	Port                int    `property:"Database Port"`
+	DSN                 string `property:"Database Connection URL" validate:"required"`
+	DriverClassname     string `property:"Database Driver Class Name" validate:"required"`
+	Host                string `property:"Database Host,descriptor:false"`
+	Port                int    `property:"Database Port,descriptor:false"`
 	User                string `property:"Database User"`
 	Password            string `property:"Password"`
-	ServiceName         string `property:"Database Service Name"`
-	ServiceID           string `property:"Database Service ID"`
-	Database            string `property:"Database Name"`
-	DSN                 string `property:"Database Connection URL"`
-	MaxWaitTime         int    `property:"Max Wait Time"`
-	MaxTotalConnections int    `property:"Max Total Connections"`
+	ServiceName         string `property:"Database Service Name,descriptor:false"`
+	ServiceID           string `property:"Database Service ID,descriptor:false"`
+	Database            string `property:"Database Name,descriptor:false"`
+	MaxWaitTime         int    `property:"Max Wait Time,default:500 millis" validate:"required"`
+	MaxTotalConnections int    `property:"Max Total Connections,default:8" validate:"required"`
 	SSHTunnelDSN        string `property:"SSH Tunnel DSN"`
 	sshTunnel           *sshtunnel.TunnelForwarder
 }
@@ -154,7 +155,7 @@ func (o *DBConnectionPoolOptions) parseCommonDSN(dsn string) error {
 		o.Engine = EngineOracle
 		o.Port = 1521
 		break
-	case "postgres":
+	case "postgres", "postgresql":
 		o.Engine = EnginePostgres
 		o.Port = 5432
 		break
@@ -318,4 +319,12 @@ func (o *DBConnectionPoolOptions) cleanSSHTunnel() {
 		o.sshTunnel.Stop()
 		o.sshTunnel = nil
 	}
+}
+
+// IsEngineTypeValid check engine type range
+func (o *DBConnectionPoolOptions) IsEngineTypeValid() bool {
+	if _EngineTypeMin > o.Engine || _EngineTypeMax < o.Engine {
+		return false
+	}
+	return true
 }
