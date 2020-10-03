@@ -32,7 +32,10 @@ const (
 	LogRotatorExpiresWeekly  = 7
 	LogRotatorExpiresSeason  = 90
 	LogRotatorExpiresYearly  = 365
+)
 
+// LogLevels
+const (
 	LogLevelTrace LogLevel = iota
 	LogLevelDebug
 	LogLevelInfo
@@ -144,7 +147,7 @@ func initFilelog(logPath string, logLevel string) error {
 	}
 
 	loggerFlag := log.Ldate | log.Ltime
-	if actLogLevel < 2 {
+	if actLogLevel < LogLevelWarning {
 		loggerFlag += log.Lshortfile
 	}
 
