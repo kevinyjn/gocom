@@ -56,12 +56,12 @@ func main() {
 }
 
 func testDemo0(ctx iris.Context) {
-	ele2 := &schemaDemo{ID: 1}
+	ele2 := &SchemaDemo{ID: 1}
 	ele2.Fetch(ele2)
 	ele2.Name = "origin_demo"
 	ele2.Save(ele2)
 
-	rows, err := rdbms.GetInstance().FetchRecords(&schemaDemo{}, 20, 0)
+	rows, err := rdbms.GetInstance().FetchRecords(&SchemaDemo{}, 20, 0)
 	if nil != err {
 		ctx.WriteString(err.Error())
 	} else {
@@ -70,59 +70,64 @@ func testDemo0(ctx iris.Context) {
 }
 
 func testDemo1() {
-	ele := schemaDemo{
+	ele := SchemaDemo{
 		Name:     "demo",
 		Category: "debug",
 	}
 
 	ele.Save(&ele)
 
-	rdbms.GetInstance().FetchRecords(&schemaDemo{}, 20, 0)
+	rdbms.GetInstance().FetchRecords(&SchemaDemo{}, 20, 0)
 
-	elex := &schemaDemo{Name: "demo"}
+	elex := &SchemaDemo{Name: "demo"}
 	elex.Fetch(elex)
 
-	ele2 := &schemaDemo{ID: 1}
+	ele2 := &SchemaDemo{ID: 1}
 	ele2.Fetch(ele2)
-	ele3 := &schemaDemo{ID: 2}
+	ele3 := &SchemaDemo{ID: 2}
 	ele3.Fetch(ele3)
 	ele2.Name = "origin_demo"
 	ele2.Save(ele2)
 
-	elex = &schemaDemo{Name: "demo"}
+	elex = &SchemaDemo{Name: "demo"}
 	elex.Fetch(elex)
 
-	elex = &schemaDemo{Name: "origin_demo"}
+	elex = &SchemaDemo{Name: "origin_demo"}
 	elex.Fetch(elex)
-	elex = &schemaDemo{Name: "origin_demo"}
+	elex = &SchemaDemo{Name: "origin_demo"}
 	elex.Fetch(elex)
 }
 
 func testDemo2() {
-	ele := schemaDemo2{
-		Name:     "demo",
-		Category: "debug",
-	}
+	ele := SchemaDemo2{}
+	ele.Name = "demo"
+	ele.Category = "debug"
 
 	ele.Save(&ele)
 
-	rdbms.GetInstance().FetchRecords(&schemaDemo2{}, 20, 0)
+	rdbms.GetInstance().FetchRecords(&SchemaDemo2{}, 20, 0)
 
-	elex := &schemaDemo2{Name: "demo"}
+	elex := &SchemaDemo2{}
+	elex.Name = "demo"
 	elex.Fetch(elex)
 
-	ele2 := &schemaDemo2{ID: 1}
+	ele2 := &SchemaDemo2{}
+	ele2.ID = 1
 	ele2.Fetch(ele2)
-	ele3 := &schemaDemo2{ID: 2}
+	ele3 := &SchemaDemo2{}
+	ele3.ID = 2
 	ele3.Fetch(ele3)
 	ele2.Name = "origin_demo"
 	ele2.Save(ele2)
 
-	elex = &schemaDemo2{Name: "demo"}
+	elex = &SchemaDemo2{}
+	elex.Name = "demo"
 	elex.Fetch(elex)
 
-	elex = &schemaDemo2{Name: "origin_demo"}
+	elex = &SchemaDemo2{}
+	elex.Name = "origin_demo"
 	elex.Fetch(elex)
-	elex = &schemaDemo2{Name: "origin_demo"}
+	elex = &SchemaDemo2{}
+	elex.Name = "origin_demo"
 	elex.Fetch(elex)
 }

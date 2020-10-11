@@ -7,7 +7,8 @@ import (
 	"github.com/kevinyjn/gocom/orm/rdbms/behaviors"
 )
 
-type schemaDemo struct {
+// SchemaDemo demo
+type SchemaDemo struct {
 	ID                          int       `xorm:"'id' Int pk autoincr" json:"id"`
 	Category                    string    `xorm:"'category' VARCHAR(36) notnull index" json:"category"`
 	Name                        string    `xorm:"'name' VARCHAR(255) notnull index" json:"name"`
@@ -16,11 +17,8 @@ type schemaDemo struct {
 	rdbms.Datasource            `xorm:"-" datasource:"default"`
 }
 
-type schemaDemo2 struct {
-	ID                          int       `xorm:"'id' Int pk autoincr" json:"id"`
-	Category                    string    `xorm:"'category' VARCHAR(36) notnull index" json:"category"`
-	Name                        string    `xorm:"'name' VARCHAR(255) notnull index" json:"name"`
-	UpdateTime                  time.Time `xorm:"'updateTime' DateTime index" json:"updateTime"`
-	behaviors.ModifyingBehavior `xorm:"extends"`
-	rdbms.Datasource            `xorm:"-" datasource:"default"`
+// SchemaDemo2 demo
+type SchemaDemo2 struct {
+	SchemaDemo `xorm:"extends"`
+	NameX      string `xorm:"'namex' VARCHAR(255) notnull index" json:"namex"`
 }

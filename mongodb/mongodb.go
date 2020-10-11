@@ -120,8 +120,8 @@ func (s *MongoSession) StartKeepAlive() {
 	ticker := time.NewTicker(time.Second * MongoDBPingInterval)
 	for {
 		select {
-		case <-ticker.C:
-			curTs := time.Now().Unix()
+		case ts := <-ticker.C:
+			curTs := ts.Unix()
 			if curTs-s.lastPingTime > 600 {
 				logger.Trace.Printf("ping %s %s %s ...", s.Name, s.Database, s.connHost)
 			}
@@ -400,7 +400,7 @@ type singleGrouppingAggregateResult struct {
 
 func (e *singleGrouppingAggregateResult) formatSingleGrouppingAggregatePipeline(aggName string, aggField string) []bson.M {
 	return []bson.M{
-		bson.M{
+		{
 			"$group": bson.M{
 				"_id": aggName,
 				"value": bson.M{

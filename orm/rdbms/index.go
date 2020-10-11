@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -380,6 +381,23 @@ func (dan *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 		if nil != err {
 			logger.Warning.Printf("Create table %s unique indexes faield with error:%v", getTableName(beanOrTableName), err)
 		}
+
+		if false {
+			beanValue := reflect.ValueOf(beanOrTableName)
+			beanType := reflect.TypeOf(beanOrTableName)
+			if beanValue.IsValid() && beanValue.Type().Kind() == reflect.Ptr {
+				beanValue = beanValue.Elem()
+				beanType = beanType.Elem()
+			}
+			if beanValue.IsValid() && beanValue.Type().Kind() == reflect.Struct {
+				firstField := beanValue.Field(0)
+				if firstField.IsValid() && firstField.Type().Kind() == reflect.Struct {
+					if beanType.Field(0).Tag.Get("xorm") == "extends" {
+						// todo
+					}
+				}
+			}
+		}
 	}
 
 	return nil
@@ -522,13 +540,38 @@ func (dan *DataAccessEngine) getPkConditionBean(orm *xorm.Engine, structureName 
 func formatPkConditionBeanImpl(pkColumns []*core.Column, value reflect.Value) (interface{}, int, error) {
 	condiValue := reflect.New(value.Type())
 	pkValues := 0
+	var pkField reflect.Value
+	var pkValue reflect.Value
 	for _, col := range pkColumns {
-		pkField := condiValue.Elem().FieldByName(col.FieldName)
-		if !pkField.IsValid() {
-			logger.Error.Printf("get table:%s primary keys condition while schema struct primary key field:%s for column:%s not defined", getTableName(value.Interface()), col.FieldName, col.Name)
-			return nil, pkValues, ErrNoPrimaryKeyFields
+		pkField = condiValue.Elem().FieldByName(col.FieldName)
+		if false == pkField.IsValid() {
+			fieldNames := strings.Split(col.FieldName, ".")
+			if len(fieldNames) > 1 {
+				pkField = condiValue.Elem()
+				pkValue = value
+				for _, fieldName := range fieldNames {
+					pkField = pkValue.FieldByName(fieldName)
+					pkValue = pkValue.FieldByName(fieldName)
+
+					if false == pkField.IsValid() {
+						break
+					}
+					if pkField.Type().Kind() == reflect.Ptr {
+						pkField = pkField.Elem()
+						pkValue = pkValue.Elem()
+					}
+					if pkField.Type().Kind() != reflect.Struct {
+						break
+					}
+				}
+			}
+			if false == pkField.IsValid() {
+				logger.Error.Printf("get table:%s primary keys condition while schema struct primary key field:%s for column:%s not defined", getTableName(value.Interface()), col.FieldName, col.Name)
+				return nil, pkValues, ErrNoPrimaryKeyFields
+			}
+		} else {
+			pkValue = value.FieldByName(col.FieldName)
 		}
-		pkValue := value.FieldByName(col.FieldName)
 		pkField.Set(pkValue)
 
 		if validates.ValidateRequired(pkField, "") == nil {
