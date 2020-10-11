@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -29,6 +30,7 @@ const (
 // local variables
 var (
 	_random           = rand.New(rand.NewSource(time.Now().UnixNano()))
+	_randomMutex      = sync.Mutex{}
 	_cachedDigistsMap = map[string]map[byte]int{}
 )
 
@@ -474,15 +476,20 @@ func RandomString(l int) string {
 	str := []byte(CharactorsBase)
 	sl := len(str)
 	result := []byte{}
+	_randomMutex.Lock()
 	for i := 0; i < l; i++ {
 		result = append(result, str[_random.Intn(sl)])
 	}
+	_randomMutex.Unlock()
 	return string(result)
 }
 
 // RandomInt random int
 func RandomInt(n int) int {
-	return _random.Intn(n)
+	_randomMutex.Lock()
+	result := _random.Intn(n)
+	_randomMutex.Unlock()
+	return result
 }
 
 // GetDigistIndex get digist index
@@ -526,7 +533,9 @@ func IncreaseValueCustomizedDigist(val string, digists string) string {
 func GenUUID() string {
 	unix32bits := uint32(time.Now().UTC().Unix())
 	buff := make([]byte, 12)
+	_randomMutex.Lock()
 	numRead, err := _random.Read(buff)
+	_randomMutex.Unlock()
 	if numRead != len(buff) || err != nil {
 		return ""
 	}
@@ -537,7 +546,9 @@ func GenUUID() string {
 func GenLoweruuid() string {
 	unix32bits := uint32(time.Now().UTC().Unix())
 	buff := make([]byte, 12)
+	_randomMutex.Lock()
 	numRead, err := _random.Read(buff)
+	_randomMutex.Unlock()
 	if numRead != len(buff) || err != nil {
 		return ""
 	}
