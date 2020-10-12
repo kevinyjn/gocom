@@ -95,7 +95,7 @@ func InitMongoDB(dbConfigs map[string]definations.DBConnectorConfig) error {
 			return err
 		}
 
-		logger.Info.Printf("Connected to mongodb %s\n", cnfname)
+		logger.Info.Printf("Connected to mongodb %s on with user:%s address:%s\n", cnfname, cliOptions.Auth.Username, one.connHost)
 
 		one.LastError = nil
 
