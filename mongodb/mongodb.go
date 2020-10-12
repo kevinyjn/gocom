@@ -21,6 +21,8 @@ import (
 const (
 	// MongoDBPingInterval mongodb heatbeat ping interval
 	MongoDBPingInterval = 5
+
+	MongoDBDriverName = "mongodb"
 )
 
 // MongoSession mongodb session
@@ -64,7 +66,7 @@ func InitMongoDB(dbConfigs map[string]definations.DBConnectorConfig) error {
 	}
 
 	for cnfname, cnf := range dbConfigs {
-		if cnf.Driver != "mongodb" {
+		if cnf.Driver != MongoDBDriverName {
 			continue
 		}
 		one := &MongoSession{
@@ -170,33 +172,34 @@ func (s *MongoSession) GetCollection(collectionName string) *mongo.Collection {
 }
 
 // FindAll finder
-func (s *MongoSession) FindAll(collectionName string, filter bson.D) []bson.M {
+func (s *MongoSession) FindAll(collectionName string, filter bson.D) ([]bson.M, error) {
 	results := []bson.M{}
 	collection := s.GetCollection(collectionName)
 	if collection == nil {
-		return results
+		return results, fmt.Errorf("Could not get db collection by collection name:%s", collectionName)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cur, err := collection.Find(ctx, filter)
 	if err != nil {
-		logger.Error.Println(err)
-		return results
+		logger.Error.Printf("Mongodb FindAll collection:%s failed with error:%v", collectionName, err)
+		return results, err
 	}
 	defer cur.Close(ctx)
 	for cur.Next(ctx) {
 		var row bson.M
 		err := cur.Decode(&row)
 		if err != nil {
-			logger.Error.Println(err)
+			logger.Error.Printf("Mongodb FindAll collection:%s decode row failed with error:%v", collectionName, err)
 		}
 		// do something with result....
 		results = append(results, row)
 	}
 	if err := cur.Err(); err != nil {
-		logger.Error.Println(err)
+		logger.Error.Printf("Mongodb FindAll collection:%s read records failed with error:%v", collectionName, err)
+		return results, err
 	}
-	return results
+	return results, nil
 }
 
 // QueryFind query
@@ -215,11 +218,11 @@ func (s *MongoSession) QueryFind(model interface{}, filter interface{}, limit in
 	defer cancel()
 	cur, err := collection.Find(ctx, filter, &options.FindOptions{Limit: &limit})
 	if err != nil {
-		logger.Error.Println(err)
-		return num, nil
+		logger.Error.Printf("Mongodb query find on collection:%s failed with error:%v", collectionName, err)
+		return num, err
 	}
 	if cur == nil {
-		logger.Error.Println("Mongodb query find while cursor is nil")
+		logger.Error.Printf("Mongodb query find on collection:%s while cursor is nil", collectionName)
 		return num, ErrorMongoDB("Mongodb query find while cursor is nil")
 	}
 	resultsValue = resultsValue.Elem()
@@ -228,7 +231,7 @@ func (s *MongoSession) QueryFind(model interface{}, filter interface{}, limit in
 		row := newMongoModel(model)
 		err := cur.Decode(row)
 		if err != nil {
-			logger.Error.Printf("MongoDB QueryFind decode row data failed with error:%v", err)
+			logger.Error.Printf("MongoDB QueryFind collection:%s decode row data failed with error:%v", collectionName, err)
 			continue
 		}
 		num++
@@ -238,7 +241,7 @@ func (s *MongoSession) QueryFind(model interface{}, filter interface{}, limit in
 		// rows = append(rows, row)
 	}
 	if err := cur.Err(); err != nil {
-		logger.Error.Printf("MongoDB QueryFind read records failed with error:%v", err)
+		logger.Error.Printf("MongoDB QueryFind collection:%s read records failed with error:%v", collectionName, err)
 	}
 	reflect.ValueOf(results).Elem().Set(resultsValue)
 	// results = resultsValue.Interface()
