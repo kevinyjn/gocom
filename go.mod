@@ -1,6 +1,6 @@
 module github.com/kevinyjn/gocom
 
-go 1.14
+go 1.15
 
 require (
 	github.com/Joker/jade v1.0.0 // indirect

@@ -77,6 +77,23 @@ func testDemo1() {
 
 	ele.Save(&ele)
 
+	eles := []interface{}{
+		&SchemaDemo{
+			Name:     "demo2",
+			Category: "debug2",
+		},
+		&SchemaDemo{
+			Name:     "demo3",
+			Category: "debug3",
+		},
+	}
+	n, err := ele.Insert(eles...)
+	if nil != err {
+		fmt.Printf("ERROR: Insert records:%+v failed with error:%v\n", eles, err)
+	} else {
+		fmt.Printf("Insert records affected %d rows\n", n)
+	}
+
 	rdbms.GetInstance().FetchRecords(&SchemaDemo{}, 20, 0)
 
 	elex := &SchemaDemo{Name: "demo"}

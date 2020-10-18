@@ -1,6 +1,7 @@
 package rdbms
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -31,6 +32,8 @@ const (
 	DefaultDatasourceName = "default"
 	DefaultSqliteFile     = "../data/default.db"
 	DefaultDatabaseName   = "default"
+
+	PingTimeoutSeconds = 5
 )
 
 // Variables
@@ -48,6 +51,7 @@ type DataAccessEngine struct {
 	mutex                          sync.RWMutex
 	mutexDatasourceName            sync.RWMutex
 	mutexTable                     sync.RWMutex
+	keepaliveTicker                *time.Ticker
 }
 
 var _dpm = &DataAccessEngine{
@@ -58,6 +62,7 @@ var _dpm = &DataAccessEngine{
 	mutex:                          sync.RWMutex{},
 	mutexDatasourceName:            sync.RWMutex{},
 	mutexTable:                     sync.RWMutex{},
+	keepaliveTicker:                nil,
 }
 
 // GetInstance data persistence manager
@@ -66,13 +71,13 @@ func GetInstance() *DataAccessEngine {
 }
 
 // Init db instance with config
-func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations.DBConnectorConfig) (*xorm.Engine, error) {
+func (dae *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations.DBConnectorConfig) (*xorm.Engine, error) {
 	var err error
 	var connData dboptions.DBConnectionData
 	if nil == dbConfig || ("" == dbConfig.Driver || "" == dbConfig.Address) {
-		dan.mutex.RLock()
-		eng := dan.orms[dbDatasourceName]
-		dan.mutex.RUnlock()
+		dae.mutex.RLock()
+		eng := dae.orms[dbDatasourceName]
+		dae.mutex.RUnlock()
 		if nil != eng {
 			logger.Warning.Printf("Initializing data access engine by instance:%s with empty or invalid db config, using existing initialized engine...", dbDatasourceName)
 			return eng, nil
@@ -117,28 +122,68 @@ func (dan *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 		orm.SetTableMapper(tbMapper)
 	}
 
-	dan.mutex.RLock()
-	exists := dan.orms[dbDatasourceName]
-	dan.mutex.RUnlock()
+	dae.mutex.RLock()
+	exists := dae.orms[dbDatasourceName]
+	dae.mutex.RUnlock()
 	if nil != exists {
 		exists.Close()
 	}
 
-	dan.mutex.Lock()
-	dan.orms[dbDatasourceName] = orm
-	dan.mutex.Unlock()
+	dae.mutex.Lock()
+	dae.orms[dbDatasourceName] = orm
+	dae.mutex.Unlock()
 	logger.Info.Printf("Initialize database connection engine with driver:%s and address:%s succeed", connData.Driver, connData.ConnDescription)
 
+	if nil == dae.keepaliveTicker {
+		go dae.StartKeepAlive()
+	}
 	return orm, nil
 }
 
-func (dan *DataAccessEngine) ensureDbEngine(dbDatasourceName string) (*xorm.Engine, error) {
-	dan.mutex.RLock()
-	orm := dan.orms[dbDatasourceName]
-	dan.mutex.RUnlock()
+// StartKeepAlive keepalive
+func (dae *DataAccessEngine) StartKeepAlive() {
+	if nil != dae.keepaliveTicker {
+		return
+	}
+	dae.keepaliveTicker = time.NewTicker(time.Second * 30)
+	for nil != dae.keepaliveTicker {
+		select {
+		case curTime := <-dae.keepaliveTicker.C:
+			dae.pingEngines(curTime)
+			break
+		}
+	}
+	if nil != dae.keepaliveTicker {
+		dae.keepaliveTicker.Stop()
+	}
+	dae.keepaliveTicker = nil
+}
+
+func (dae *DataAccessEngine) pingEngines(curTime time.Time) {
+	engs := map[string]*xorm.Engine{}
+	dae.mutex.RLock()
+	for cate, eg := range dae.orms {
+		engs[cate] = eg
+	}
+	dae.mutex.RUnlock()
+	for cate, eg := range engs {
+		pingCtx, cancel := context.WithTimeout(context.Background(), PingTimeoutSeconds*time.Second)
+		defer cancel()
+		err := eg.PingContext(pingCtx)
+		if nil != err {
+			logger.Error.Printf("Ping database %s failed with error:%v", cate, err)
+			// todo: find reconnect method
+		}
+	}
+}
+
+func (dae *DataAccessEngine) ensureDbEngine(dbDatasourceName string) (*xorm.Engine, error) {
+	dae.mutex.RLock()
+	orm := dae.orms[dbDatasourceName]
+	dae.mutex.RUnlock()
 	if nil == orm {
 		logger.Warning.Printf("ensuring database engine by instance:%s while the database instance were not successfully initialize, initializing it using default engine...", dbDatasourceName)
-		return dan.Init(dbDatasourceName, nil)
+		return dae.Init(dbDatasourceName, nil)
 	}
 	return orm, nil
 }
@@ -146,9 +191,9 @@ func (dan *DataAccessEngine) ensureDbEngine(dbDatasourceName string) (*xorm.Engi
 // FetchAll fetch all data object from database on conditionBean
 // Nodes: there would be a max {MaxArrayCachingDurationSeconds} seconds non-syncronized to db data
 // in case inserted some records in rows that conditionBean specifies.
-func (dan *DataAccessEngine) FetchAll(condiBeans interface{}) ([]interface{}, error) {
+func (dae *DataAccessEngine) FetchAll(condiBeans interface{}) ([]interface{}, error) {
 	records := []interface{}{}
-	structureName, orm, err := dan.getDbEngineWithStructureName(condiBeans)
+	structureName, orm, err := dae.getDbEngineWithStructureName(condiBeans)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
@@ -173,13 +218,13 @@ func (dan *DataAccessEngine) FetchAll(condiBeans interface{}) ([]interface{}, er
 // in case inserted some records in rows that conditionBean specifies. while, this case would not
 // be commonly comes out because that the new record would be inserted at the tail of rows in many
 // databases
-func (dan *DataAccessEngine) FetchRecords(condiBeans interface{}, limit, offset int) ([]interface{}, error) {
+func (dae *DataAccessEngine) FetchRecords(condiBeans interface{}, limit, offset int) ([]interface{}, error) {
 	records := []interface{}{}
 	if 0 >= limit || 0 > offset {
 		logger.Error.Printf("Fetching records by table:%s on condition:%+v with limit:%d offset:%d while limit should greater than 0 and offset should not less than 0", getTableName(condiBeans), condiBeans, limit, offset)
 		return records, errors.New("limit should greater than 0 and offset should not less than 0")
 	}
-	structureName, orm, err := dan.getDbEngineWithStructureName(condiBeans)
+	structureName, orm, err := dae.getDbEngineWithStructureName(condiBeans)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
@@ -201,8 +246,8 @@ func (dan *DataAccessEngine) FetchRecords(condiBeans interface{}, limit, offset 
 
 // FetchOne Get retrieve one record from table, bean's non-empty fields are conditions.
 // The bean should be a pointer to a struct
-func (dan *DataAccessEngine) FetchOne(bean interface{}) (bool, error) {
-	structureName, orm, err := dan.getDbEngineWithStructureName(bean)
+func (dae *DataAccessEngine) FetchOne(bean interface{}) (bool, error) {
+	structureName, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Fetching record by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return false, err
@@ -223,7 +268,7 @@ func (dan *DataAccessEngine) FetchOne(bean interface{}) (bool, error) {
 	if nil != err {
 		logger.Error.Printf("Fetching record by table:%s on condition:%+v failed with error:%v", getTableName(bean), bean, err)
 	} else if has {
-		pkCondiBean, _ := dan.getPkConditionBean(orm, structureName, bean)
+		pkCondiBean, _ := dae.getPkConditionBean(orm, structureName, bean)
 		cacheGroup.set(bean, condiBean, pkCondiBean)
 	} else {
 		logger.Info.Printf("Fetching record by table:%s on condition:%+v while there is no such record", getTableName(bean), bean)
@@ -232,13 +277,13 @@ func (dan *DataAccessEngine) FetchOne(bean interface{}) (bool, error) {
 }
 
 // SaveOne save record data to table, bean's ID field would be primary key conditions.
-func (dan *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
-	structureName, orm, err := dan.getDbEngineWithStructureName(bean)
+func (dae *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
+	structureName, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Saving record by table:%s on while get database engine failed with error:%v", getTableName(bean), err)
 		return false, err
 	}
-	condiBean, err := dan.getPkConditionBean(orm, structureName, bean)
+	condiBean, err := dae.getPkConditionBean(orm, structureName, bean)
 	var ok = true
 	var rc int64
 	var cacheGroup *cacheElementGroup = nil
@@ -288,7 +333,7 @@ func (dan *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
 	if nil != cacheGroup {
 		cacheGroup.set(bean, condiBean, nil)
 	} else if enableCaching {
-		condiBean, err = dan.getPkConditionBean(orm, structureName, bean)
+		condiBean, err = dae.getPkConditionBean(orm, structureName, bean)
 		if nil == err {
 			getCaches().group(structureName).set(bean, condiBean, nil)
 		}
@@ -298,8 +343,8 @@ func (dan *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
 
 // Exists check record exists from table, bean's non-empty fields are conditions.
 // The bean should be a pointer to a struct
-func (dan *DataAccessEngine) Exists(bean interface{}) (bool, error) {
-	structureName, orm, err := dan.getDbEngineWithStructureName(bean)
+func (dae *DataAccessEngine) Exists(bean interface{}) (bool, error) {
+	structureName, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Fetching record by table:%s on condition:%v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return false, err
@@ -318,8 +363,8 @@ func (dan *DataAccessEngine) Exists(bean interface{}) (bool, error) {
 }
 
 // Count record counts from table, bean's non-empty fields are conditions.
-func (dan *DataAccessEngine) Count(bean interface{}) (int64, error) {
-	_, orm, err := dan.getDbEngineWithStructureName(bean)
+func (dae *DataAccessEngine) Count(bean interface{}) (int64, error) {
+	_, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Counting record by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return 0, err
@@ -331,9 +376,73 @@ func (dan *DataAccessEngine) Count(bean interface{}) (int64, error) {
 	return counts, err
 }
 
+// Insert save record data to table, bean's ID field would be primary key conditions.
+func (dae *DataAccessEngine) Insert(beans ...interface{}) (int64, error) {
+	if len(beans) <= 0 {
+		logger.Error.Printf("Insert records by passing no records")
+		return 0, fmt.Errorf("Passing no records")
+	}
+	structureName, orm, err := dae.getDbEngineWithStructureName(beans[0])
+	if nil != err {
+		logger.Error.Printf("Insert record by table:%s on while get database engine failed with error:%v", getTableName(beans[0]), err)
+		return 0, err
+	}
+	var rc int64
+	var enableCaching bool = false
+
+	rc, err = orm.Insert(beans...)
+	if nil != err {
+		logger.Error.Printf("Insert records while do insert failed with error:%v", err)
+		return rc, err
+	}
+	logger.Info.Printf("successfully inserted table:%s affected %d records", getTableName(beans[0]), rc)
+
+	if enableCaching {
+		for _, bean := range beans {
+			condiBean, err := dae.getPkConditionBean(orm, structureName, bean)
+			if nil == err {
+				getCaches().group(structureName).set(bean, condiBean, nil)
+			}
+		}
+	}
+	return rc, nil
+}
+
+// InsertMulti insert records data to table, bean's ID field would be primary key conditions.
+func (dae *DataAccessEngine) InsertMulti(beans []interface{}) (int64, error) {
+	if len(beans) <= 0 {
+		logger.Error.Printf("InsertMulti records by passing no records")
+		return 0, fmt.Errorf("Passing no records")
+	}
+	structureName, orm, err := dae.getDbEngineWithStructureName(beans[0])
+	if nil != err {
+		logger.Error.Printf("InsertMulti records by table:%s on while get database engine failed with error:%v", getTableName(beans[0]), err)
+		return 0, err
+	}
+	var rc int64
+	var enableCaching bool = false
+
+	rc, err = orm.Insert(beans...)
+	if nil != err {
+		logger.Error.Printf("InsertMulti record while do insert failed with error:%v", err)
+		return rc, err
+	}
+	logger.Info.Printf("successfully inserted table:%s affected %d records", getTableName(beans[0]), rc)
+
+	if enableCaching {
+		for _, bean := range beans {
+			condiBean, err := dae.getPkConditionBean(orm, structureName, bean)
+			if nil == err {
+				getCaches().group(structureName).set(bean, condiBean, nil)
+			}
+		}
+	}
+	return rc, nil
+}
+
 // Delete record from table, bean's non-empty fields are conditions.
-func (dan *DataAccessEngine) Delete(bean interface{}) (int64, error) {
-	structureName, orm, err := dan.getDbEngineWithStructureName(bean)
+func (dae *DataAccessEngine) Delete(bean interface{}) (int64, error) {
+	structureName, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Deleting record by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return 0, err
@@ -347,14 +456,14 @@ func (dan *DataAccessEngine) Delete(bean interface{}) (int64, error) {
 }
 
 // EnsureTableStructures check if the table named in {beanOrTableName} struct exists in database, create it if not exixts.
-func (dan *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) error {
+func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) error {
 	var ok bool
-	_, datasourceName := dan.getDatasourceName(beanOrTableName, dan.defaultDatasource)
+	_, datasourceName := dae.getDatasourceName(beanOrTableName, dae.defaultDatasource)
 	if "" == datasourceName {
-		dan.defaultDatasource = DefaultDatasourceName
-		datasourceName = dan.defaultDatasource
+		dae.defaultDatasource = DefaultDatasourceName
+		datasourceName = dae.defaultDatasource
 	}
-	orm, err := dan.ensureDbEngine(datasourceName)
+	orm, err := dae.ensureDbEngine(datasourceName)
 	if nil != err {
 		logger.Error.Printf("ensuring table %s on database while ensure the database engine failed with error:%v", getTableName(beanOrTableName), err)
 		return err
@@ -419,41 +528,41 @@ func getTableName(beanOrTableName interface{}) string {
 }
 
 // GetDbEngine get table datasource name
-func (dan *DataAccessEngine) GetDbEngine(beanOrTableName interface{}) (*xorm.Engine, error) {
-	_, orm, err := dan.getDbEngineWithStructureName(beanOrTableName)
+func (dae *DataAccessEngine) GetDbEngine(beanOrTableName interface{}) (*xorm.Engine, error) {
+	_, orm, err := dae.getDbEngineWithStructureName(beanOrTableName)
 	return orm, err
 }
 
-func (dan *DataAccessEngine) getDbEngineWithStructureName(beanOrTableName interface{}) (string, *xorm.Engine, error) {
-	structureName, datasourceName := dan.getDatasourceName(beanOrTableName, dan.defaultDatasource)
+func (dae *DataAccessEngine) getDbEngineWithStructureName(beanOrTableName interface{}) (string, *xorm.Engine, error) {
+	structureName, datasourceName := dae.getDatasourceName(beanOrTableName, dae.defaultDatasource)
 	if "" == datasourceName {
-		dan.defaultDatasource = DefaultDatasourceName
-		datasourceName = dan.defaultDatasource
+		dae.defaultDatasource = DefaultDatasourceName
+		datasourceName = dae.defaultDatasource
 	}
-	orm, err := dan.ensureDbEngine(datasourceName)
+	orm, err := dae.ensureDbEngine(datasourceName)
 	if nil != err {
 		logger.Error.Printf("ensuring table %s on database sepcified by instance:%s while ensure the database engine failed with error:%v", getTableName(beanOrTableName), datasourceName, err)
 		return structureName, nil, err
 	}
 
 	if "" != structureName {
-		dan.mutexTable.RLock()
-		tbl, ok := dan.structuesByTableBeanName[structureName]
-		dan.mutexTable.RUnlock()
+		dae.mutexTable.RLock()
+		tbl, ok := dae.structuesByTableBeanName[structureName]
+		dae.mutexTable.RUnlock()
 		if nil == tbl || !ok {
-			dan.EnsureTableStructures(beanOrTableName)
+			dae.EnsureTableStructures(beanOrTableName)
 		}
 	}
 	return structureName, orm, nil
 }
 
-func (dan *DataAccessEngine) getDatasourceName(beanOrTableName interface{}, defaultDatasourceName string) (string, string) {
+func (dae *DataAccessEngine) getDatasourceName(beanOrTableName interface{}, defaultDatasourceName string) (string, string) {
 	val := getBeanValue(beanOrTableName)
 	if val.Type().Kind() == reflect.Struct {
 		structureName := fmt.Sprintf("%s.%s", val.Type().PkgPath(), val.Type().Name())
-		dan.mutexDatasourceName.RLock()
-		dataSourceName := dan.datasourceNamesByTableBeanName[structureName]
-		dan.mutexDatasourceName.RUnlock()
+		dae.mutexDatasourceName.RLock()
+		dataSourceName := dae.datasourceNamesByTableBeanName[structureName]
+		dae.mutexDatasourceName.RUnlock()
 		for "" == dataSourceName {
 			dsField, ok := val.Type().FieldByName("Datasource")
 			if ok {
@@ -481,9 +590,9 @@ func (dan *DataAccessEngine) getDatasourceName(beanOrTableName interface{}, defa
 			}
 		}
 		if "" != dataSourceName {
-			dan.mutexDatasourceName.Lock()
-			dan.datasourceNamesByTableBeanName[structureName] = dataSourceName
-			dan.mutexDatasourceName.Unlock()
+			dae.mutexDatasourceName.Lock()
+			dae.datasourceNamesByTableBeanName[structureName] = dataSourceName
+			dae.mutexDatasourceName.Unlock()
 			return structureName, dataSourceName
 		}
 	} else if val.Type().Kind() == reflect.String {
@@ -492,7 +601,7 @@ func (dan *DataAccessEngine) getDatasourceName(beanOrTableName interface{}, defa
 	return "", defaultDatasourceName
 }
 
-func (dan *DataAccessEngine) getPkConditionBean(orm *xorm.Engine, structureName string, bean interface{}) (interface{}, error) {
+func (dae *DataAccessEngine) getPkConditionBean(orm *xorm.Engine, structureName string, bean interface{}) (interface{}, error) {
 	var condiBean interface{}
 	var err error
 	var pkValues int
@@ -505,18 +614,18 @@ func (dan *DataAccessEngine) getPkConditionBean(orm *xorm.Engine, structureName 
 		return condiBean, errors.New("condition bean were not struct type")
 	}
 	var pkCols []*core.Column
-	dan.mutexTable.RLock()
-	tbl, ok := dan.structuesByTableBeanName[structureName]
-	dan.mutexTable.RUnlock()
+	dae.mutexTable.RLock()
+	tbl, ok := dae.structuesByTableBeanName[structureName]
+	dae.mutexTable.RUnlock()
 	if nil == tbl || !ok {
 		tbl = orm.TableInfo(bean)
 		if nil == tbl {
 			logger.Error.Printf("get table:%s primary keys condition while get table info empty", getTableName(bean))
 			return condiBean, errors.New("Table info empty")
 		}
-		dan.mutexTable.Lock()
-		dan.structuesByTableBeanName[structureName] = tbl
-		dan.mutexTable.Unlock()
+		dae.mutexTable.Lock()
+		dae.structuesByTableBeanName[structureName] = tbl
+		dae.mutexTable.Unlock()
 		pkCols = tbl.PKColumns()
 		getCaches().group(structureName).pkColumns = pkCols
 	} else {
