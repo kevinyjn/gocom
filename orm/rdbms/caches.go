@@ -10,7 +10,7 @@ import (
 	"github.com/kevinyjn/gocom/queues"
 	"github.com/kevinyjn/gocom/utils"
 	"github.com/kevinyjn/gocom/validator/validates"
-	"xorm.io/core"
+	"xorm.io/xorm/schemas"
 )
 
 // Constants
@@ -35,7 +35,7 @@ type cacheElementGroup struct {
 	objects                *cacheElementWrapper // map[conditionBean]*cacheElement
 	arrayObjects           *cacheElementWrapper // map[conditionBean]*cacheElement{data:[]rowPrimaryKeyText}
 	timeoutsTicker         *time.Ticker
-	pkColumns              []*core.Column
+	pkColumns              []*schemas.Column
 }
 
 type cacheElement struct {

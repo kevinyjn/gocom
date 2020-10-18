@@ -16,8 +16,9 @@ import (
 	"github.com/kevinyjn/gocom/utils"
 	"github.com/kevinyjn/gocom/validator/validates"
 
-	"github.com/go-xorm/xorm"
-	"xorm.io/core"
+	"xorm.io/xorm"
+	"xorm.io/xorm/names"
+	"xorm.io/xorm/schemas"
 
 	// justifying
 	_ "github.com/denisenkom/go-mssqldb" // sqlserver
@@ -46,8 +47,8 @@ var (
 type DataAccessEngine struct {
 	orms                           map[string]*xorm.Engine // map[dbDatasourceName]*xorm.Engine
 	defaultDatasource              string
-	datasourceNamesByTableBeanName map[string]string      // map[beanNameOrTableName]datasourceName
-	structuesByTableBeanName       map[string]*xorm.Table // map[beanNameOrTableName]*core.Table
+	datasourceNamesByTableBeanName map[string]string         // map[beanNameOrTableName]datasourceName
+	structuesByTableBeanName       map[string]*schemas.Table // map[beanNameOrTableName]*schemas.Table
 	mutex                          sync.RWMutex
 	mutexDatasourceName            sync.RWMutex
 	mutexTable                     sync.RWMutex
@@ -58,7 +59,7 @@ var _dpm = &DataAccessEngine{
 	orms:                           map[string]*xorm.Engine{},
 	defaultDatasource:              "",
 	datasourceNamesByTableBeanName: map[string]string{},
-	structuesByTableBeanName:       map[string]*xorm.Table{},
+	structuesByTableBeanName:       map[string]*schemas.Table{},
 	mutex:                          sync.RWMutex{},
 	mutexDatasourceName:            sync.RWMutex{},
 	mutexTable:                     sync.RWMutex{},
@@ -118,7 +119,7 @@ func (dae *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 	orm.DatabaseTZ = time.Local
 
 	if "" != dbConfig.TablePrefix {
-		tbMapper := core.NewPrefixMapper(core.SnakeMapper{}, dbConfig.TablePrefix)
+		tbMapper := names.NewPrefixMapper(names.SnakeMapper{}, dbConfig.TablePrefix)
 		orm.SetTableMapper(tbMapper)
 	}
 
@@ -513,7 +514,7 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 }
 
 func getTableName(beanOrTableName interface{}) string {
-	tblName, ok := beanOrTableName.(xorm.TableName)
+	tblName, ok := beanOrTableName.(names.TableName)
 	if ok {
 		return tblName.TableName()
 	}
@@ -613,12 +614,16 @@ func (dae *DataAccessEngine) getPkConditionBean(orm *xorm.Engine, structureName 
 		logger.Error.Printf("get bean:%v primary keys condition while the bean were not struct type.", bean)
 		return condiBean, errors.New("condition bean were not struct type")
 	}
-	var pkCols []*core.Column
+	var pkCols []*schemas.Column
 	dae.mutexTable.RLock()
 	tbl, ok := dae.structuesByTableBeanName[structureName]
 	dae.mutexTable.RUnlock()
 	if nil == tbl || !ok {
-		tbl = orm.TableInfo(bean)
+		tbl, err = orm.TableInfo(bean)
+		if nil != err {
+			logger.Error.Printf("get table:%s primary keys condition while get table info empty", getTableName(bean))
+			return condiBean, errors.New("Table info empty")
+		}
 		if nil == tbl {
 			logger.Error.Printf("get table:%s primary keys condition while get table info empty", getTableName(bean))
 			return condiBean, errors.New("Table info empty")
@@ -646,7 +651,7 @@ func (dae *DataAccessEngine) getPkConditionBean(orm *xorm.Engine, structureName 
 	return condiBean, err
 }
 
-func formatPkConditionBeanImpl(pkColumns []*core.Column, value reflect.Value) (interface{}, int, error) {
+func formatPkConditionBeanImpl(pkColumns []*schemas.Column, value reflect.Value) (interface{}, int, error) {
 	condiValue := reflect.New(value.Type())
 	pkValues := 0
 	var pkField reflect.Value
