@@ -38,6 +38,7 @@ require (
 	go.mongodb.org/mongo-driver v1.4.2
 	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
 	golang.org/x/net v0.0.0-20201016165138-7b1cca2348c0 // indirect
+	golang.org/x/text v0.3.3
 	gopkg.in/yaml.v2 v2.3.0
 	xorm.io/xorm v1.0.5
 )
