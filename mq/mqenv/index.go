@@ -51,6 +51,7 @@ type MQConsumerMessage struct {
 	AppID         string      `json:"appId"`
 	UserID        string      `json:"userId"`
 	ContentType   string      `json:"contentType"`
+	Exchange      string      `json:"exchange"`
 	RoutingKey    string      `json:"routingKey"`
 	Timestamp     time.Time   `json:"-"`
 	Body          []byte      `json:"body"`

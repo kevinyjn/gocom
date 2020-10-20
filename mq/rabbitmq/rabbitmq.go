@@ -835,6 +835,7 @@ func generateMQResponseMessage(d *amqp.Delivery) mqenv.MQConsumerMessage {
 		AppID:         d.AppId,
 		UserID:        d.UserId,
 		ContentType:   d.ContentType,
+		Exchange:      d.Exchange,
 		RoutingKey:    d.RoutingKey,
 		Timestamp:     d.Timestamp,
 		Body:          d.Body,
