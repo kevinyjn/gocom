@@ -566,9 +566,11 @@ func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliver
 	for d := range deliveries {
 		if logger.IsDebugEnabled() {
 			logger.Trace.Printf(
-				"got %dB delivery: [%v] %s",
+				"got %dB delivery: [%v] from rk:%s(%s) %s",
 				len(d.Body),
 				d.DeliveryTag,
+				d.RoutingKey,
+				d.Exchange,
 				d.Body,
 			)
 		}
@@ -708,10 +710,10 @@ func (r *RabbitMQ) handleRPCCallback(d amqp.Delivery) *mqenv.MQPublishMessage {
 	if pmExists {
 		if pm.CallbackEnabled() {
 			// fmt.Printf("====> push back response data %s %+v\n", correlationID, pm)
-			resp := generateMQResponseMessage(&d)
+			resp := generateMQResponseMessage(&d, r.Config.ExchangeName)
 			resp.Queue = r.queueName
 			resp.ReplyTo = pm.ReplyTo
-			pm.Response <- resp
+			pm.Response <- *resp
 		}
 		delete(r.rpcCallbacks, correlationID)
 		d.Ack(false)
@@ -805,11 +807,11 @@ func (r *RabbitMQ) generatePublishMessageByDelivery(d *amqp.Delivery, queueName 
 }
 
 // GenerateRabbitMQConsumerProxy generate rabbitmq consumer proxy
-func GenerateRabbitMQConsumerProxy(consumeProxy *mqenv.MQConsumerProxy) *RabbitConsumerProxy {
+func GenerateRabbitMQConsumerProxy(consumeProxy *mqenv.MQConsumerProxy, exchangeName string) *RabbitConsumerProxy {
 	cb := func(d amqp.Delivery) *mqenv.MQPublishMessage {
-		msg := generateMQResponseMessage(&d)
+		msg := generateMQResponseMessage(&d, exchangeName)
 		if nil != consumeProxy.Callback {
-			return consumeProxy.Callback(msg)
+			return consumeProxy.Callback(*msg)
 		}
 		return nil
 	}
@@ -826,8 +828,8 @@ func GenerateRabbitMQConsumerProxy(consumeProxy *mqenv.MQConsumerProxy) *RabbitC
 	return pxy
 }
 
-func generateMQResponseMessage(d *amqp.Delivery) mqenv.MQConsumerMessage {
-	msg := mqenv.MQConsumerMessage{
+func generateMQResponseMessage(d *amqp.Delivery, exchangeName string) *mqenv.MQConsumerMessage {
+	msg := &mqenv.MQConsumerMessage{
 		Driver:        mqenv.DriverTypeAMQP,
 		Queue:         d.RoutingKey,
 		CorrelationID: d.CorrelationId,
@@ -842,6 +844,9 @@ func generateMQResponseMessage(d *amqp.Delivery) mqenv.MQConsumerMessage {
 		Timestamp:     d.Timestamp,
 		Body:          d.Body,
 		BindData:      d,
+	}
+	if "" == msg.Exchange {
+		msg.Exchange = exchangeName
 	}
 	return msg
 }

@@ -140,14 +140,14 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 			if nil == rpcInst {
 				return fmt.Errorf("No RPC rabbitmq instance by %s found", mqCategory)
 			}
-			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy)
+			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy, mqConfig.Exchange.Name)
 			rpcInst.Consume <- pxy
 		} else {
 			inst, err := rabbitmq.GetRabbitMQ(mqCategory)
 			if nil != err {
 				return err
 			}
-			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy)
+			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy, mqConfig.Exchange.Name)
 			inst.Consume <- pxy
 		}
 	} else if mqenv.DriverTypeKafka == mqDriver {

@@ -160,8 +160,8 @@ func handleRPCConsume(deliveries <-chan amqp.Delivery, done chan error) {
 		if pmExists {
 			if pm.CallbackEnabled() {
 				fmt.Printf("====> push back response data %s %+v\n", correlationID, pm)
-				resp := generateMQResponseMessage(&d)
-				pm.Response <- resp
+				resp := generateMQResponseMessage(&d, d.Exchange)
+				pm.Response <- *resp
 			}
 			delete(_cbs, correlationID)
 			d.Ack(false)
