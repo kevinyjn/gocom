@@ -454,7 +454,7 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 		}
 	}
 
-	exchangeName, routingKey := r.Config.ExchangeName, pm.RoutingKey
+	exchangeName, routingKey := pm.Exchange, pm.RoutingKey
 	if nil != r.beforePublish { // specially rpc instance for old version
 		exchangeName, routingKey = r.beforePublish(pm)
 	} else if nil != pm.Response {
@@ -467,6 +467,8 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 	}
 	if pm.SkipExchange || ("" != pm.CorrelationID && false == r.isReplyNeededMessageAnswered(pm.CorrelationID)) {
 		exchangeName = ""
+	} else if "" == exchangeName {
+		exchangeName = r.Config.ExchangeName
 	}
 	if "" == routingKey {
 		routingKey = r.queueName

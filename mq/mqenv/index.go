@@ -61,6 +61,7 @@ type MQConsumerMessage struct {
 // MQPublishMessage publish message
 type MQPublishMessage struct {
 	Body             []byte                 `json:"body"`
+	Exchange         string                 `json:"exchange"`
 	RoutingKey       string                 `json:"routingKey"`
 	CorrelationID    string                 `json:"correlationId"`
 	ReplyTo          string                 `json:"replyTo"`
