@@ -193,6 +193,12 @@ func handlerHealthz(ctx iris.Context) {
 	results["result"] = checkResults
 	results["messages"] = messages
 	out, err := json.MarshalIndent(results, "", "    ")
+	for _, chkResult := range checkResults {
+		if "failed" == chkResult {
+			ctx.StatusCode(iris.StatusInternalServerError)
+			break
+		}
+	}
 	if err != nil {
 		ctx.WriteString(err.Error())
 	} else {
@@ -338,7 +344,7 @@ func checkHTTPGetEndpoint(url string, trigger chan LivenessCheckResult) {
 	resp, err := httpclient.HTTPGet(url, nil)
 	checkResult := LivenessCheckResult{
 		Name:   "healthz - " + url,
-		Status: "failed",
+		Status: "timeout",
 	}
 	if nil != err {
 		checkResult.Status = err.Error()
