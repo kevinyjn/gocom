@@ -35,9 +35,10 @@ func (n *Proxies) FetchProxyURL(endpointURL string) string {
 
 // DBConnectorConfig db connector configuration
 type DBConnectorConfig struct {
-	Driver      string `yaml:"driver"`
-	Address     string `yaml:"address"`
-	Db          string `yaml:"db"`
-	Mechanism   string `yaml:"mechanism"`
-	TablePrefix string `yaml:"tablePrefix"`
+	Driver       string `yaml:"driver"`
+	Address      string `yaml:"address"`
+	Db           string `yaml:"db"`
+	Mechanism    string `yaml:"mechanism"`
+	TablePrefix  string `yaml:"tablePrefix"`
+	SSHTunnelDSN string `yaml:"sshTunnel"`
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/kataras/iris"
 	"github.com/kevinyjn/gocom/config"
+	"github.com/kevinyjn/gocom/healthz"
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq"
 	"github.com/kevinyjn/gocom/mq/mqenv"
@@ -13,6 +14,7 @@ import (
 
 // InitServiceHandler initialize
 func InitServiceHandler(app *iris.Application) error {
+	healthz.InitHealhz(app)
 	app.Get("/test", testPublishWebMessage)
 
 	mqTopic := "biz-consumer"
@@ -110,7 +112,7 @@ func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) *mqenv.MQPublishMessa
 func testPublishRPCMessage() {
 	pm := &mqenv.MQPublishMessage{
 		Body:     []byte("Testing data"),
-		Response: make(chan []byte),
+		Response: make(chan mqenv.MQConsumerMessage),
 		ReplyTo:  mq.GetMQConfig("rpc-consumer").Queue,
 	}
 	err := mq.PublishMQ("demo", pm)
@@ -121,7 +123,7 @@ func testPublishRPCMessage() {
 	ticker := time.NewTicker(time.Duration(3000) * time.Millisecond)
 	select {
 	case res := <-pm.Response:
-		fmt.Printf("Got response: %s\n", string(res))
+		fmt.Printf("Got response: %s\n", string(res.Body))
 		break
 	case <-ticker.C:
 		pm.OnClosed()
@@ -133,7 +135,7 @@ func testPublishRPCMessage() {
 func testPublishWebMessage(ctx iris.Context) {
 	pm := &mqenv.MQPublishMessage{
 		Body:     []byte("Testing data"),
-		Response: make(chan []byte),
+		Response: make(chan mqenv.MQConsumerMessage),
 		ReplyTo:  mq.GetMQConfig("rpc-consumer").Queue,
 	}
 	err := mq.PublishMQ("demo", pm)
@@ -145,7 +147,7 @@ func testPublishWebMessage(ctx iris.Context) {
 	ticker := time.NewTicker(time.Duration(3000) * time.Millisecond)
 	select {
 	case res := <-pm.Response:
-		ctx.WriteString(fmt.Sprintf("Got response: %s\n", string(res)))
+		ctx.WriteString(fmt.Sprintf("Got response: %s\n", string(res.Body)))
 		break
 	case <-ticker.C:
 		pm.OnClosed()

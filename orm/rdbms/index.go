@@ -160,13 +160,27 @@ func (dae *DataAccessEngine) StartKeepAlive() {
 	dae.keepaliveTicker = nil
 }
 
-func (dae *DataAccessEngine) pingEngines(curTime time.Time) {
+// Ping all engines
+func (dae *DataAccessEngine) Ping() error {
+	return dae.pingEngines(time.Now())
+}
+
+// IsValid is any engine valid
+func (dae *DataAccessEngine) IsValid() bool {
+	dae.mutex.RLock()
+	ormLen := len(dae.orms)
+	dae.mutex.RUnlock()
+	return ormLen > 0
+}
+
+func (dae *DataAccessEngine) pingEngines(curTime time.Time) error {
 	engs := map[string]*xorm.Engine{}
 	dae.mutex.RLock()
 	for cate, eg := range dae.orms {
 		engs[cate] = eg
 	}
 	dae.mutex.RUnlock()
+	errMessages := []string{}
 	for cate, eg := range engs {
 		pingCtx, cancel := context.WithTimeout(context.Background(), PingTimeoutSeconds*time.Second)
 		defer cancel()
@@ -174,8 +188,13 @@ func (dae *DataAccessEngine) pingEngines(curTime time.Time) {
 		if nil != err {
 			logger.Error.Printf("Ping database %s failed with error:%v", cate, err)
 			// todo: find reconnect method
+			errMessages = append(errMessages, fmt.Sprintf("Ping database %s failed with error:%v", cate, err))
 		}
 	}
+	if len(errMessages) > 0 {
+		return fmt.Errorf(strings.Join(errMessages, ";"))
+	}
+	return nil
 }
 
 func (dae *DataAccessEngine) ensureDbEngine(dbDatasourceName string) (*xorm.Engine, error) {

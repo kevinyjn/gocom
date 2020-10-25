@@ -49,20 +49,7 @@ func GetRPCRabbitMQ(key string) *RabbitRPC {
 	}
 	now := time.Now().Unix()
 	if (r.QueueStatus.Consumers < 1 && now-r.QueueStatus.RefreshingTime > 1) || now-r.QueueStatus.RefreshingTime > AMQPQueueStatusFreshDuration {
-		var queue amqp.Queue
-		var err error
-		if false {
-			queue, err = r.Channel.QueueDeclare(
-				r.QueueStatus.QueueName,
-				r.Config.QueueDurable,
-				false,
-				false,
-				false,
-				nil,
-			)
-		} else {
-			queue, err = r.Channel.QueueInspect(r.QueueStatus.QueueName)
-		}
+		queue, err := r.Channel.QueueInspect(r.QueueStatus.QueueName)
 		if err != nil {
 			logger.Warning.Printf("Could not get rabbit mq queue status by queue name:%s", r.QueueStatus.QueueName)
 			return nil

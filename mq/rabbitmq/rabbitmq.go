@@ -101,6 +101,9 @@ func inspectQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (*amqp.Queue, erro
 		autoDelete = true
 		durable = false
 		queueName = ""
+	} else if "" == queueName {
+		autoDelete = true
+		durable = false
 	}
 	queue, err := channel.QueueDeclare(
 		queueName,  // name of the queue

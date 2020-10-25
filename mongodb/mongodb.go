@@ -10,6 +10,7 @@ import (
 
 	"github.com/kevinyjn/gocom/definations"
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/netutils/sshtunnel"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -33,6 +34,7 @@ type MongoSession struct {
 	Name         string
 	connHost     string
 	lastPingTime int64
+	sshTunnel    *sshtunnel.TunnelForwarder
 }
 
 // MongoMeta mongodb models meta structure
@@ -83,6 +85,9 @@ func InitMongoDB(dbConfigs map[string]definations.DBConnectorConfig) error {
 		if cnf.Mechanism != "" {
 			cliOptions.Auth.AuthMechanism = cnf.Mechanism
 		}
+		// if "" != cnf.SSHTunnelDSN && !pinger.Connectable(one.connHost, 0) {
+
+		// }
 		client, err := mongo.NewClient(cliOptions)
 		if err != nil {
 			logger.Error.Printf("Create mongodb client %s %s failed with error:%v", cnfname, cnf.Address, err)
@@ -110,6 +115,17 @@ func InitMongoDB(dbConfigs map[string]definations.DBConnectorConfig) error {
 // GetMongoDB get mongodb
 func GetMongoDB(name string) *MongoSession {
 	return mongosets[name]
+}
+
+// GetAllMongoDBs all iterable mongo sessions
+func GetAllMongoDBs() map[string]*MongoSession {
+	sessions := map[string]*MongoSession{}
+	if nil != mongosets {
+		for name, s := range mongosets {
+			sessions[name] = s
+		}
+	}
+	return sessions
 }
 
 // AddMongoBeforeSaveObserver observer

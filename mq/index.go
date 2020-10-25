@@ -23,12 +23,21 @@ const (
 )
 
 var mqCategoryDrivers = map[string]string{}
+var mqConnConfigs = map[string]mqenv.MQConnectorConfig{}
 
 // Init initializer
 func Init(mqConfigFile string, mqDriverConfigs map[string]mqenv.MQConnectorConfig) error {
 	mqRoutesEnv, err := InitMQRoutesEnv(mqConfigFile)
 	if err != nil {
 		return err
+	}
+	if nil != mqDriverConfigs {
+		for connName, cfg := range mqDriverConfigs {
+			_, ok := mqConnConfigs[connName]
+			if false == ok {
+				mqConnConfigs[connName] = cfg
+			}
+		}
 	}
 	return InitWithMQRoutes(mqRoutesEnv, mqDriverConfigs)
 }
@@ -51,9 +60,20 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 		return fmt.Errorf("Initialize MQ topic for category:%s while topic config nil", topicCategory)
 	}
 	instCnf, ok := mqDriverConfigs[topicConfig.Instance]
-	if ok == false {
-		logger.Error.Printf("Initialize mq:%s with connection instance:%s failed, the instance not configured.", topicCategory, topicConfig.Instance)
-		return fmt.Errorf("Initialize mq:%s with connection instance:%s failed, the instance not configured", topicCategory, topicConfig.Instance)
+	if false == ok {
+		instCnf, ok = mqConnConfigs[topicConfig.Instance]
+		if false == ok {
+			logger.Error.Printf("Initialize mq:%s with connection instance:%s failed, the instance not configured.", topicCategory, topicConfig.Instance)
+			return fmt.Errorf("Initialize mq:%s with connection instance:%s failed, the instance not configured", topicCategory, topicConfig.Instance)
+		}
+	} else {
+		_, ok = mqConnConfigs[topicConfig.Instance]
+		if false == ok {
+			mqConnConfigs[topicConfig.Instance] = instCnf
+		}
+	}
+	if nil == GetMQConfig(topicCategory) {
+		GetMQRoutes()[topicCategory] = *topicConfig
 	}
 	var initErr error
 	mqCategoryDrivers[topicCategory] = instCnf.Driver
@@ -84,6 +104,17 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 		return initErr
 	}
 	return nil
+}
+
+// GetAllMQDriverConfigs configs
+func GetAllMQDriverConfigs() map[string]mqenv.MQConnectorConfig {
+	result := map[string]mqenv.MQConnectorConfig{}
+	if nil != mqConnConfigs {
+		for connName, cfg := range mqConnConfigs {
+			result[connName] = cfg
+		}
+	}
+	return result
 }
 
 // InitMQWithRPC init mq with RPC
