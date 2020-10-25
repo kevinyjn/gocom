@@ -275,7 +275,7 @@ func (r *Kafka) consume(cm *ConsumerProxy) error {
 }
 
 func (r *Kafka) handleConsumes(cm *ConsumerProxy) {
-	for {
+	for nil != r.Reader {
 		msg, err := r.Reader.FetchMessage(context.Background())
 		if nil != err {
 			logger.Error.Printf("Consume kafka message with topic:%s failed with error:%v", cm.Topic, err)
