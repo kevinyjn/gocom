@@ -231,6 +231,7 @@ func initHealthzMQConsumer() {
 			BindingKey:  "",
 			RoutingKeys: map[string]string{},
 			Durable:     false,
+			AutoDelete:  true,
 			RPCEnabled:  false,
 			Topic:       fmt.Sprintf("healthz-%s", gocom.GlobalUUID),
 			GroupID:     "",

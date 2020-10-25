@@ -86,6 +86,7 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			ExchangeName:    topicConfig.Exchange.Name,
 			ExchangeType:    topicConfig.Exchange.Type,
 			BindingKey:      topicConfig.BindingKey,
+			QueueAutoDelete: topicConfig.AutoDelete,
 		}
 		if topicConfig.RPCEnabled {
 			return nil
@@ -136,6 +137,7 @@ func InitMQWithRPC(topicCategory string, rpcType int, connCfg *mqenv.MQConnector
 			ExchangeName:    mqCfg.Exchange.Name,
 			ExchangeType:    mqCfg.Exchange.Type,
 			BindingKey:      mqCfg.BindingKey,
+			QueueAutoDelete: mqCfg.AutoDelete,
 		}
 		if rabbitmq.InitRPCRabbitMQ(topicCategory, rpcType, connCfg, amqpCfg) == nil {
 			return errors.New("Initialize rabbitmq mq rpc failed")

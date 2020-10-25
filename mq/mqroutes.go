@@ -24,6 +24,7 @@ type Config struct {
 	BindingKey  string            `yaml:"bindingKey"`
 	RoutingKeys map[string]string `yaml:"routingKeys"`
 	Durable     bool              `yaml:"durable"`
+	AutoDelete  bool              `yaml:"autoDelete"`
 	RPCEnabled  bool              `yaml:"rpcEnabled"`
 	// Kafka parameters
 	Topic   string `yaml:"topic"`
