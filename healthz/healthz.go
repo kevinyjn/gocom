@@ -47,6 +47,16 @@ func InitHealhz(app *iris.Application) {
 	initHealthzMQConsumer()
 }
 
+// SetCustomHealthzChecks healthz checks
+func SetCustomHealthzChecks(checks []config.HealthzChecks) {
+	if nil != checks {
+		customizedHealthzChecks = make([]config.HealthzChecks, 0)
+		for i, chk := range checks {
+			customizedHealthzChecks[i] = chk
+		}
+	}
+}
+
 func (c *mqCheckListWrapper) CheckConsumers(trigger chan LivenessCheckResult, mqEvent chan mqenv.MQEvent) *mqCheckListWrapper {
 	checkInst := &mqCheckListWrapper{
 		categories: map[string]string{},
