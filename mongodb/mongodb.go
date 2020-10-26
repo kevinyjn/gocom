@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kevinyjn/gocom/definations"
@@ -21,20 +22,26 @@ import (
 // Constant
 const (
 	// MongoDBPingInterval mongodb heatbeat ping interval
-	MongoDBPingInterval = 5
+	MongoDBPingInterval   = 5
+	MongoDBConnectTimeout = 15
+	MongoDBPingTimeout    = 8
+	MongoDBQueryTimeout   = 30
 
 	MongoDBDriverName = "mongodb"
 )
 
 // MongoSession mongodb session
 type MongoSession struct {
-	Client       *mongo.Client
-	Database     string
-	LastError    error
-	Name         string
-	connHost     string
-	lastPingTime int64
-	sshTunnel    *sshtunnel.TunnelForwarder
+	Client        *mongo.Client
+	Database      string
+	LastError     error
+	Name          string
+	connHost      string
+	lastPingTime  int64
+	connected     bool
+	clientOptions *options.ClientOptions
+	sshTunnel     *sshtunnel.TunnelForwarder
+	m             sync.RWMutex
 }
 
 // MongoMeta mongodb models meta structure
@@ -74,6 +81,7 @@ func InitMongoDB(dbConfigs map[string]definations.DBConnectorConfig) error {
 		one := &MongoSession{
 			Name:     cnfname,
 			Database: cnf.Db,
+			m:        sync.RWMutex{},
 		}
 		addrs := strings.Split(cnf.Address, "@")
 		if len(addrs) < 2 {
@@ -81,26 +89,19 @@ func InitMongoDB(dbConfigs map[string]definations.DBConnectorConfig) error {
 		} else {
 			one.connHost = addrs[1]
 		}
-		cliOptions := options.Client().ApplyURI(cnf.Address)
+		one.clientOptions = options.Client().ApplyURI(cnf.Address)
 		if cnf.Mechanism != "" {
-			cliOptions.Auth.AuthMechanism = cnf.Mechanism
+			one.clientOptions.Auth.AuthMechanism = cnf.Mechanism
 		}
 		// if "" != cnf.SSHTunnelDSN && !pinger.Connectable(one.connHost, 0) {
 
 		// }
-		client, err := mongo.NewClient(cliOptions)
-		if err != nil {
-			logger.Error.Printf("Create mongodb client %s %s failed with error:%v", cnfname, cnf.Address, err)
-			one.LastError = err
-			return err
-		}
-		one.Client = client
-		err = one.connect()
+		err := one.connect()
 		if err != nil {
 			return err
 		}
 
-		logger.Info.Printf("Connected to mongodb %s on with user:%s address:%s\n", cnfname, cliOptions.Auth.Username, one.connHost)
+		logger.Info.Printf("Connected to mongodb %s on with user:%s address:%s\n", cnfname, one.clientOptions.Auth.Username, one.connHost)
 
 		one.LastError = nil
 
@@ -156,15 +157,48 @@ func (s *MongoSession) StartKeepAlive() {
 
 // Ping pinger
 func (s *MongoSession) Ping() error {
-	return s.Client.Ping(nil, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBPingTimeout*time.Second)
+	defer cancel()
+	s.m.RLock()
+	err := s.Client.Ping(ctx, nil)
+	s.m.RUnlock()
+	return err
 }
 
 func (s *MongoSession) connect() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	originClient := s.Client
+	client, err := mongo.NewClient(s.clientOptions)
+	if err != nil {
+		logger.Error.Printf("Create mongodb client %s %s failed with error:%v", s.Name, s.connHost, err)
+		// s.LastError = err
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBConnectTimeout*time.Second)
 	defer cancel()
-	s.LastError = s.Client.Connect(ctx)
-	if s.LastError != nil {
-		logger.Error.Printf("Connect to mongodb %s %s failed with error:%s", s.Name, s.connHost, s.LastError.Error())
+	err = client.Connect(ctx)
+	s.m.Lock()
+	s.Client = client
+	// if s.connected {
+	// 	logger.Warning.Printf("Reconnecting to mongodb %s %s...", s.Name, s.connHost)
+	// 	ctx, cancel := context.WithTimeout(context.Background(), MongoDBConnectTimeout*time.Second)
+	// 	defer cancel()
+	// 	s.Client.Disconnect(ctx)
+	// 	s.connected = false
+	// } else {
+	// 	logger.Info.Printf("Connecting to mongodb %s %s...", s.Name, s.connHost)
+	// }
+	// s.LastError = s.Client.Connect(ctx)
+	s.LastError = err
+	s.m.Unlock()
+	if nil != err {
+		logger.Error.Printf("Connect to mongodb %s %s failed with error:%s", s.Name, s.connHost, err.Error())
+	} else {
+		s.connected = true
+		logger.Info.Printf("Connect to mongodb %s %s succeed", s.Name, s.connHost)
+	}
+
+	if nil != originClient {
+		originClient.Disconnect(nil)
 	}
 	return s.LastError
 }
@@ -180,7 +214,9 @@ func (s *MongoSession) GetCollection(collectionName string) *mongo.Collection {
 		logger.Error.Printf("Get mongodb collection:%s while the mongodb connection was failed with error:%s", collectionName, s.LastError.Error())
 		return nil
 	}
+	s.m.RLock()
 	col := s.Client.Database(s.Database).Collection(collectionName)
+	s.m.RUnlock()
 	if col == nil {
 		logger.Error.Printf("Get mongodb collection:%s failed", collectionName)
 	}
@@ -194,7 +230,7 @@ func (s *MongoSession) FindAll(collectionName string, filter bson.D) ([]bson.M, 
 	if collection == nil {
 		return results, fmt.Errorf("Could not get db collection by collection name:%s", collectionName)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBQueryTimeout*time.Second)
 	defer cancel()
 	cur, err := collection.Find(ctx, filter)
 	if err != nil {
@@ -230,7 +266,7 @@ func (s *MongoSession) QueryFind(model interface{}, filter interface{}, limit in
 	if collection == nil {
 		return num, fmt.Errorf("Could not get db collection by collection name:%s", collectionName)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBQueryTimeout*time.Second)
 	defer cancel()
 	cur, err := collection.Find(ctx, filter, &options.FindOptions{Limit: &limit})
 	if err != nil {
@@ -317,7 +353,7 @@ func (s *MongoSession) FindOne(dst interface{}, filter interface{}, opts ...*opt
 	if collection == nil {
 		return ErrorMongoDB(fmt.Sprintf("Could not get collection object by collection name:%s", collectionName))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBQueryTimeout*time.Second)
 	defer cancel()
 	err := collection.FindOne(ctx, filter, opts...).Decode(dst)
 	if err != nil {
@@ -334,7 +370,7 @@ func (s *MongoSession) SaveOne(dst interface{}, isInsert bool) error {
 	if collection == nil {
 		return ErrorMongoDB(fmt.Sprintf("Could not get collection object by collection name:%s", collectionName))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBQueryTimeout*time.Second)
 	defer cancel()
 
 	dispatchMongoBeforeSaveEvent(dst)
@@ -379,7 +415,7 @@ func (s *MongoSession) DeleteOne(dst interface{}, isInsert bool) error {
 	if collection == nil {
 		return ErrorMongoDB(fmt.Sprintf("Could not get collection object by collection name:%s", collectionName))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBQueryTimeout*time.Second)
 	defer cancel()
 
 	value := reflect.ValueOf(dst).Elem()
@@ -401,7 +437,7 @@ func (s *MongoSession) MongoDBInsertMany(collectionName string, docs []interface
 		return false
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBQueryTimeout*time.Second)
 	defer cancel()
 	_, err := collection.InsertMany(ctx, docs)
 	if err != nil {
@@ -442,7 +478,7 @@ func (s *MongoSession) QueryMaxID(model interface{}, result interface{}, aggFiel
 		return ErrorMongoDB(fmt.Sprintf("Query max id of collection:%s while the result value must referes a pointer.", collectionName))
 	}
 	value = value.Elem()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoDBQueryTimeout*time.Second)
 	defer cancel()
 
 	aggResult := singleGrouppingAggregateResult{}
