@@ -39,12 +39,18 @@ var (
 	livenessTickerCache     = map[string]*mqCheckListWrapper{}
 	mqChecks                = mqCheckListWrapper{categories: map[string]string{}}
 	customizedHealthzChecks []config.HealthzChecks
+	traceLog                = false
 )
 
 // InitHealhz register iris healthz handler
 func InitHealhz(app *iris.Application) {
 	app.Get("/healthz", handlerHealthz)
 	initHealthzMQConsumer()
+}
+
+// SetTraceLog boolean
+func SetTraceLog(enable bool) {
+	traceLog = enable
 }
 
 // SetCustomHealthzChecks healthz checks
@@ -256,7 +262,9 @@ func initHealthzMQConsumer() {
 }
 
 func handleHealthzConsumer(msg mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
-	logger.Trace.Printf("Got mq %s %s check key:%s value:%s", msg.Driver, msg.Queue, msg.RoutingKey, string(msg.Body))
+	if traceLog {
+		logger.Trace.Printf("Got mq %s %s check key:%s value:%s", msg.Driver, msg.Queue, msg.RoutingKey, string(msg.Body))
+	}
 	cacherKey := string(msg.Body)
 	ev, ok := livenessTickerCache[cacherKey]
 	if ok {

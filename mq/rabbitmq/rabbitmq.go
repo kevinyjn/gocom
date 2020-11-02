@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kevinyjn/gocom/logger"
@@ -478,7 +479,9 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 		exchangeName = ""
 	}
 	if logger.IsDebugEnabled() {
-		logger.Trace.Printf("publishing message(%s) to %s(%s) with %dB body (%s)", pm.CorrelationID, routingKey, exchangeName, len(pm.Body), pm.Body)
+		if false == strings.HasPrefix(routingKey, "healthz") {
+			logger.Trace.Printf("publishing message(%s) to %s(%s) with %dB body (%s)", pm.CorrelationID, routingKey, exchangeName, len(pm.Body), pm.Body)
+		}
 	}
 
 	headers := amqp.Table{}
@@ -568,6 +571,10 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliveries <-chan amqp.Delivery) {
 	for d := range deliveries {
 		if logger.IsDebugEnabled() {
+			if strings.HasPrefix(d.RoutingKey, "healthz") {
+				// skip the healthz checking log
+				continue
+			}
 			logger.Trace.Printf(
 				"got %dB delivery: [%v] from rk:%s(%s) %s",
 				len(d.Body),
