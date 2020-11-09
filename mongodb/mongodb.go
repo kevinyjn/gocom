@@ -396,7 +396,7 @@ func (s *MongoSession) SaveOne(dst interface{}, isInsert bool) error {
 		value := reflect.ValueOf(dst).Elem()
 		field := value.FieldByName("ID")
 		key := field.Interface()
-		updates := mongoOrganizeUpdatesFields(dst)
+		updates := MongoOrganizeUpdatesFields(dst)
 		filter := bson.M{"_id": key}
 		_, err := collection.UpdateOne(ctx, filter, updates)
 		if err != nil {
@@ -524,7 +524,8 @@ func mongoStructFieldGetTagNames(field reflect.StructField) []string {
 	return []string{}
 }
 
-func mongoOrganizeUpdatesFields(v interface{}) interface{} {
+// MongoOrganizeUpdatesFields make {"$set": { }} fields
+func MongoOrganizeUpdatesFields(v interface{}) interface{} {
 	value := reflect.ValueOf(v)
 	t := reflect.TypeOf(v)
 	if value.Kind() == reflect.Ptr {
