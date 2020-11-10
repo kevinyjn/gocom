@@ -42,8 +42,8 @@ var (
 	traceLog                = false
 )
 
-// InitHealhz register iris healthz handler
-func InitHealhz(app *iris.Application) {
+// InitHealthz register iris healthz handler
+func InitHealthz(app *iris.Application) {
 	app.Get("/healthz", handlerHealthz)
 	initHealthzMQConsumer()
 }
