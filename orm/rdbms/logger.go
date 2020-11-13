@@ -1,6 +1,8 @@
 package rdbms
 
 import (
+	"strings"
+
 	"github.com/kevinyjn/gocom/logger"
 	"xorm.io/xorm/log"
 )
@@ -27,6 +29,9 @@ func (l *ormLogger) Info(v ...interface{}) {
 	logger.Info.Print(v...)
 }
 func (l *ormLogger) Infof(format string, v ...interface{}) {
+	if strings.HasPrefix(format, "PING DATABASE") {
+		return
+	}
 	logger.Info.Printf(format, v...)
 }
 func (l *ormLogger) Warn(v ...interface{}) {

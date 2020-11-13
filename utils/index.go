@@ -321,7 +321,11 @@ func ParseRemoteIP(val string) string {
 // GetRemoteAddress get http request remote ip
 func GetRemoteAddress(r *http.Request) string {
 	ra := r.Header.Get("X-Real-IP")
-	if ra != "" {
+	if "" != ra {
+		return ra
+	}
+	ra = r.Header.Get("x-real-ip")
+	if "" != ra {
 		return ra
 	}
 	ra = ParseRemoteIP(r.RemoteAddr)
