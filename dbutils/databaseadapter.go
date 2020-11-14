@@ -6,7 +6,7 @@ import "strings"
 type DatabaseAdapter interface {
 	GetName() string
 	GetDescription() string
-	GetSelectStatement(tableName string, columnNames string, whereClause string, orderByClause string, limit int, offset int, columnForPartitioning ...string) string
+	GetSelectStatement(tableName string, columnNames string, whereClause string, orderByClause string, limit int, offset int, columnForPartitioning ...string) (string, error)
 	UnwrapIdentifier(identifier string) string
 	GetTableAliasClause(tableName string) string
 }
