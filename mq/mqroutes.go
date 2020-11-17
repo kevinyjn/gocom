@@ -10,25 +10,25 @@ import (
 
 // Exchange struct
 type Exchange struct {
-	Type    string `yaml:"type"`
-	Name    string `yaml:"name"`
-	Durable bool   `yaml:"durable"`
+	Type    string `yaml:"type" json:"type"`
+	Name    string `yaml:"name" json:"name"`
+	Durable bool   `yaml:"durable" json:"durable"`
 }
 
 // Config struct
 type Config struct {
-	Instance string `yaml:"instance"`
+	Instance string `yaml:"instance" json:"instance"`
 	// RabbitMQ parameters
-	Queue       string            `yaml:"queue"`
-	Exchange    Exchange          `yaml:"exchange"`
-	BindingKey  string            `yaml:"bindingKey"`
-	RoutingKeys map[string]string `yaml:"routingKeys"`
-	Durable     bool              `yaml:"durable"`
-	AutoDelete  bool              `yaml:"autoDelete"`
+	Queue       string            `yaml:"queue" json:"queue"`
+	Exchange    Exchange          `yaml:"exchange" json:"exchange"`
+	BindingKey  string            `yaml:"bindingKey" json:"bindingKey"`
+	RoutingKeys map[string]string `yaml:"routingKeys" json:"routingKeys"`
+	Durable     bool              `yaml:"durable" json:"durable"`
+	AutoDelete  bool              `yaml:"autoDelete" json:"autoDelete"`
 	RPCEnabled  bool              `yaml:"rpcEnabled"`
 	// Kafka parameters
-	Topic   string `yaml:"topic"`
-	GroupID string `yaml:"groupId"`
+	Topic   string `yaml:"topic" json:"topic"`
+	GroupID string `yaml:"groupId" json:"groupId"`
 }
 
 // RoutesEnv struct
