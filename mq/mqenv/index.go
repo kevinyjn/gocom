@@ -29,15 +29,15 @@ type MQEvent struct {
 
 // MQConnectorConfig connector config
 type MQConnectorConfig struct {
-	Driver       string `yaml:"driver"`
-	Host         string `yaml:"host"`
-	Port         int    `yaml:"port"`
-	Path         string `yaml:"virtualHost"`
-	User         string `yaml:"username"`
-	Password     string `yaml:"password"`
-	Timeout      int    `yaml:"timeout"`
-	Heartbeat    int    `yaml:"heartbeat"`
-	SSHTunnelDSN string `yaml:"sshTunnel"`
+	Driver       string `yaml:"driver" json:"driver"`
+	Host         string `yaml:"host" json:"host"`
+	Port         int    `yaml:"port" json:"port"`
+	Path         string `yaml:"virtualHost" json:"virtualHost"`
+	User         string `yaml:"username" json:"username"`
+	Password     string `yaml:"password" json:"password"`
+	Timeout      int    `yaml:"timeout" json:"timeout"`
+	Heartbeat    int    `yaml:"heartbeat" json:"heartbeat"`
+	SSHTunnelDSN string `yaml:"sshTunnel" json:"sshTunnel"`
 }
 
 // MQConsumerMessage consumer message
