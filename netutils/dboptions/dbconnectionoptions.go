@@ -15,10 +15,9 @@ import (
 	// justifying
 	_ "github.com/denisenkom/go-mssqldb" // sqlserver
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/go-sql-driver/mysql" // mysql, tidb
-	_ "github.com/godror/godror"       // oracle
-	_ "github.com/lib/pq"              // postgres, cockroachdb
-	_ "github.com/mattn/go-sqlite3"    // sqlite
+	_ "github.com/godror/godror"    // oracle
+	_ "github.com/lib/pq"           // postgres, cockroachdb
+	_ "github.com/mattn/go-sqlite3" // sqlite
 )
 
 // Constants
@@ -142,6 +141,9 @@ func (o *DBConnectionPoolOptions) ParseDSN() error {
 
 func (o *DBConnectionPoolOptions) parseCommonDSN(dsn string) error {
 	slices := strings.SplitN(dsn, "://", 2)
+	if len(slices) <= 1 {
+		return fmt.Errorf("Parsing database connection string:%s with invalid format", dsn)
+	}
 	switch strings.ToLower(slices[0]) {
 	case "sqlserver":
 		o.Engine = EngineMSSQL
