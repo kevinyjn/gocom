@@ -16,6 +16,16 @@ func TestValidates(t *testing.T) {
 	}
 }
 
+func TestValidateDefault(t *testing.T) {
+	tst := &testStruct{
+		requiredString: "a",
+		requiredArray:  []string{"b"},
+	}
+	err := validator.Validate(tst)
+	AssertNil(t, err, "Validate result")
+	fmt.Printf("validate result:%+v\n", tst)
+}
+
 type testValidates struct {
 	requiredString  string       `validate:"required" comment:"字符串必填字段"`
 	requiredInt     int          `validate:"required" comment:"整形必填字段"`
@@ -28,6 +38,10 @@ type testValidates struct {
 type testStruct struct {
 	requiredString string   `validate:"required" comment:"字符串必填字段2"`
 	requiredArray  []string `validate:"required" comment:"字符串数组必填字段"`
+	OptionalValue  string   `validate:"optional" comment:"默认值字段21" default:"abcde"`
+	OptionalInt    int      `validate:"optional" comment:"默认值字段22" default:"10000"`
+	OptionalFloat  int      `validate:"optional" comment:"默认值字段23" default:"1"`
+	OptionalBool   bool     `validate:"optional" comment:"默认值字段24" default:"true"`
 }
 
 func testValidatesRequired() error {

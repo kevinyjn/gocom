@@ -21,19 +21,27 @@ func Validate(v interface{}) error {
 		return nil
 	}
 
+	var err error
 	for i := 0; i < value.NumField(); i++ {
 		f := value.Field(i)
 		ft := t.Field(i)
-		validateInfo := ft.Tag.Get("validate")
-		if validateInfo == "" {
-			continue
-		}
 		commentInfo := ft.Tag.Get("comment")
 		if commentInfo == "" {
 			commentInfo = ft.Name
 		}
+		defaultInfo := ft.Tag.Get("default")
+		if "" != defaultInfo && (ft.Name[0] >= 'A' && ft.Name[0] <= 'Z') {
+			err = validates.ValidateDefault(f, defaultInfo, commentInfo)
+			if nil != err {
+				msgs = append(msgs, err.Error())
+			}
+		}
+		validateInfo := ft.Tag.Get("validate")
+		if validateInfo == "" {
+			continue
+		}
 
-		err := ValidateFieldValue(f, validateInfo, commentInfo)
+		err = ValidateFieldValue(f, validateInfo, commentInfo)
 		if nil != err {
 			msgs = append(msgs, err.Error())
 		}

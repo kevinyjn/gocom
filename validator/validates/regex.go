@@ -1,7 +1,6 @@
 package validates
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -20,5 +19,5 @@ func ValidateRegex(v reflect.Value, regtext string, label string) error {
 	if reg.MatchString(v.String()) {
 		return nil
 	}
-	return errors.New(fmt.Sprintf("%s内容不合规范", label))
+	return fmt.Errorf("%s内容不合规范", label)
 }

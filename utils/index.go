@@ -187,6 +187,17 @@ func ToBoolean(val interface{}) bool {
 	if val == nil {
 		return false
 	}
+	switch val.(type) {
+	case string:
+		v, e := strconv.ParseBool(val.(string))
+		if nil == e {
+			return v
+		} else {
+			return false
+		}
+	default:
+		break
+	}
 	return val.(bool)
 }
 
