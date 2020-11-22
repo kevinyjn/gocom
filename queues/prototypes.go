@@ -36,4 +36,6 @@ type IQueue interface {
 	CutBefore(idx int) []IElement
 	// CutAfter cut elements out after index
 	CutAfter(idx int) []IElement
+	// GetSize of queue
+	GetSize() int
 }
