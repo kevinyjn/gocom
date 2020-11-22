@@ -107,12 +107,6 @@ func testQueueOperatesInCoroutine() error {
 }
 
 func TestQueuesFindElements(t *testing.T) {
-	err := testQueueFindElements(t)
-	AssertNil(t, err, "testQueueFindElements")
-	fmt.Println("Testing queue find elements finished")
-}
-
-func testQueueFindElements(t *testing.T) error {
 	queue1 := queues.NewAscOrderingQueue()
 	items := []*demoElement{
 		{val: "3", ordering: 3},
@@ -145,8 +139,9 @@ func testQueueFindElements(t *testing.T) error {
 		AssertEquals(t, v, results4[i], fmt.Sprintf("results4[%d]", i))
 	}
 
-	results, ok := queue1.PopMany(3)
-	AssertTrue(t, ok, "queue1.PopMany")
-	AssertEquals(t, 3, len(results), "queue1.PopMany(3) length")
-	return nil
+	results, n := queue1.PopMany(3)
+	AssertEquals(t, 3, n, "queue1.PopMany(3) length")
+	AssertEquals(t, 3, len(results), "queue1.PopMany(3) results length")
+
+	fmt.Println("Testing queue find elements finished")
 }

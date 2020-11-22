@@ -46,10 +46,10 @@ func (q *FIFOQueue) Pop() (interface{}, bool) {
 }
 
 // PopMany head elements from queue limited by maxResults, the element would be deleted from queue
-func (q *FIFOQueue) PopMany(maxResults int) ([]interface{}, bool) {
+func (q *FIFOQueue) PopMany(maxResults int) ([]interface{}, int) {
 	maxLen := q.GetSize()
 	if 0 >= maxLen || 0 >= maxResults {
-		return nil, false
+		return nil, 0
 	}
 
 	if maxLen > maxResults {
@@ -62,7 +62,7 @@ func (q *FIFOQueue) PopMany(maxResults int) ([]interface{}, bool) {
 	}
 	q.queue = append([]IElement{}, q.queue[maxLen:]...)
 	q.m.Unlock()
-	return items, true
+	return items, maxLen
 }
 
 // First item without pop

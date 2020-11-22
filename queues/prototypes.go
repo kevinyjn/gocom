@@ -17,7 +17,7 @@ type IQueue interface {
 	// Pop first element from queue, the element would be deleted from queue
 	Pop() (interface{}, bool)
 	// PopMany head elements from queue limited by maxResults, the element would be deleted from queue
-	PopMany(maxResults int) ([]interface{}, bool)
+	PopMany(maxResults int) ([]interface{}, int)
 	// First element of queue would be returned, the element would not be deleted from queue
 	First() (interface{}, bool)
 	// Push an element into queue
