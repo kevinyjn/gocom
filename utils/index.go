@@ -192,9 +192,8 @@ func ToBoolean(val interface{}) bool {
 		v, e := strconv.ParseBool(val.(string))
 		if nil == e {
 			return v
-		} else {
-			return false
 		}
+		return false
 	default:
 		break
 	}
@@ -311,11 +310,17 @@ func HumanToTimestamp(format string, v string) int64 {
 	return t.Unix()
 }
 
-// CurTimestampMiliSec millisecond
-func CurTimestampMiliSec() int64 {
+// CurrentMillisecond millisecond
+func CurrentMillisecond() int64 {
 	now := time.Now()
 	nowTimestamp := now.Unix()*1000 + int64(now.Nanosecond()/1000000)
 	return nowTimestamp
+}
+
+// CurTimestampMiliSec millisecond
+// Deprecated: implements CurrentMillisecond instead
+func CurTimestampMiliSec() int64 {
+	return CurrentMillisecond()
 }
 
 // ParseRemoteIP parse remote ip
