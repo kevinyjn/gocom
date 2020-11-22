@@ -11,14 +11,10 @@ import (
 
 func TestQueuesOperate(t *testing.T) {
 	err := testOrderedQueue()
-	if nil != err {
-		t.Errorf("Testing ordered queue failed with error:%v", err)
-	}
+	AssertNil(t, err, "testOrderedQueue")
 	fmt.Println("Testing ordered queue finished")
 	err = testQueueOperatesInCoroutine()
-	if nil != err {
-		t.Errorf("Testing operates queue in coroutine failed with error:%v", err)
-	}
+	AssertNil(t, err, "testQueueOperatesInCoroutine")
 	fmt.Println("Testing operates queue in coroutine finished")
 }
 
@@ -111,14 +107,12 @@ func testQueueOperatesInCoroutine() error {
 }
 
 func TestQueuesFindElements(t *testing.T) {
-	err := testQueueFindElements()
-	if nil != err {
-		t.Errorf("Testing queue find elements failed with error:%v", err)
-	}
+	err := testQueueFindElements(t)
+	AssertNil(t, err, "testQueueFindElements")
 	fmt.Println("Testing queue find elements finished")
 }
 
-func testQueueFindElements() error {
+func testQueueFindElements(t *testing.T) error {
 	queue1 := queues.NewAscOrderingQueue()
 	items := []*demoElement{
 		{val: "3", ordering: 3},
@@ -141,22 +135,18 @@ func testQueueFindElements() error {
 	results3 := queue1.FindElements(definations.NewComparisonObject().And(definations.CompareContains, "val", "345"))
 	results4 := queue1.FindElements(definations.NewComparisonObject().And(definations.CompareBetween, "val", []string{"3", "5"}))
 
-	if len(results1) != 3 {
-		return fmt.Errorf("Find queue elements results while result size:%d not match 3", len(results1))
-	}
-	if len(results1) != len(results2) {
-		return fmt.Errorf("Find two results not match length results1:%d results2:%d", len(results1), len(results2))
-	}
-	if len(results1) != len(results3) {
-		return fmt.Errorf("Find two results not match length results1:%d results3:%d", len(results1), len(results3))
-	}
-	if len(results1) != len(results4) {
-		return fmt.Errorf("Find two results not match length results1:%d results4:%d", len(results1), len(results4))
-	}
+	AssertEquals(t, 3, len(results1), "results1.length")
+	AssertEquals(t, len(results1), len(results2), "results2.length")
+	AssertEquals(t, len(results1), len(results3), "results3.length")
+	AssertEquals(t, len(results1), len(results4), "results4.length")
 	for i, v := range results1 {
-		if v != results2[i] || v != results3[i] || v != results4[i] {
-			return fmt.Errorf("Find two results while element value:%+v on index:%d does not match", v, i)
-		}
+		AssertEquals(t, v, results2[i], fmt.Sprintf("results2[%d]", i))
+		AssertEquals(t, v, results3[i], fmt.Sprintf("results3[%d]", i))
+		AssertEquals(t, v, results4[i], fmt.Sprintf("results4[%d]", i))
 	}
+
+	results, ok := queue1.PopMany(3)
+	AssertTrue(t, ok, "queue1.PopMany")
+	AssertEquals(t, 3, len(results), "queue1.PopMany(3) length")
 	return nil
 }
