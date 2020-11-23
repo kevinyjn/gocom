@@ -350,6 +350,11 @@ func (r *RabbitMQ) initConn() error {
 						logger.Fatal.Printf("create channel failed with error:%v", err)
 						return
 					}
+					r.connClosed = make(chan *amqp.Error)
+					r.channelClosed = make(chan *amqp.Error)
+					r.Conn.NotifyClose(r.connClosed)
+					r.Channel.NotifyClose(r.channelClosed)
+
 					if r.Config.IsBroadcastExange() && len(r.consumers) <= 0 && len(r.pendingConsumers) <= 0 {
 						break
 					}
@@ -417,10 +422,6 @@ func (r *RabbitMQ) ensureQueue() error {
 	r.QueueStatus.RefreshingTime = time.Now().Unix()
 	r.queue = queue
 	r.queueName = queue.Name
-	r.connClosed = make(chan *amqp.Error)
-	r.channelClosed = make(chan *amqp.Error)
-	r.Conn.NotifyClose(r.connClosed)
-	r.Channel.NotifyClose(r.channelClosed)
 	if nil != r.afterEnsureQueue {
 		r.afterEnsureQueue()
 	}

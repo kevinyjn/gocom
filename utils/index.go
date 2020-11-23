@@ -25,6 +25,11 @@ import (
 // Constants
 const (
 	CharactorsBase = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	SizeGB   = 1024 * 1024 * 1024
+	SizeMB   = 1024 * 1024
+	SizeKB   = 1024
+	DecadeKB = 10240
 )
 
 // local variables
@@ -705,4 +710,56 @@ func HashCodeAsInt(content []byte) int {
 		return -v
 	}
 	return v
+}
+
+// SubStringUTF8 sub utf-8 encode string to support chinese text submation
+// this method avoids the traditional []rune() method to optimize the execution time
+func SubStringUTF8(s string, length int, start ...int) string {
+	offset := 0
+	if nil != start {
+		offset = start[0]
+	}
+	return SubStringFromUTF8(s, length, offset, false)
+}
+
+// SubStringFromUTF8 sub utf-8 encode string to support chinese text submation
+// this method avoids the traditional []rune() method to optimize the execution time
+func SubStringFromUTF8(s string, length int, start int, markDots bool) string {
+	var n, endpos, startpos int
+	cutted := false
+	length = length + start
+
+	for endpos = range s {
+		if n == start {
+			startpos = endpos
+		} else if n >= length {
+			cutted = true
+			break
+		}
+		n++
+	}
+
+	if cutted && markDots {
+		return s[startpos:endpos] + "..."
+	}
+	return s[startpos:endpos]
+}
+
+// HumanByteSize convert byte size as human recognizable
+func HumanByteSize(bs int) string {
+	var name string
+	var n float64
+	if bs > SizeGB {
+		name = "GB"
+		n = float64(bs) / SizeGB
+	} else if bs > SizeMB {
+		name = "MB"
+		n = float64(bs) / SizeMB
+	} else if bs > DecadeKB {
+		name = "KB"
+		n = float64(bs) / SizeKB
+	} else {
+		return fmt.Sprintf("%d Bytes", bs)
+	}
+	return fmt.Sprintf("%.2f %s", n, name)
 }

@@ -14,7 +14,7 @@ import (
 
 // InitServiceHandler initialize
 func InitServiceHandler(app *iris.Application) error {
-	healthz.InitHealhz(app)
+	healthz.InitHealthz(app)
 	app.Get("/test", testPublishWebMessage)
 
 	mqTopic := "biz-consumer"
