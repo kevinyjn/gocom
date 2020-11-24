@@ -1,6 +1,7 @@
 package rdbms
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/kevinyjn/gocom/logger"
@@ -13,32 +14,32 @@ type ormLogger struct {
 }
 
 func (l *ormLogger) Debug(v ...interface{}) {
-	// logger.Debug.Print(v...)
+	// logger.Debug.Output(2, fmt.Sprint(v...))
 }
 
 func (l *ormLogger) Debugf(format string, v ...interface{}) {
-	// logger.Debug.Printf(format, v...)
+	// logger.Debug.Output(2, fmt.Sprintf(format, v...))
 }
 func (l *ormLogger) Error(v ...interface{}) {
-	logger.Error.Print(v...)
+	logger.Error.Output(2, fmt.Sprint(v...))
 }
 func (l *ormLogger) Errorf(format string, v ...interface{}) {
-	logger.Error.Printf(format, v...)
+	logger.Error.Output(2, fmt.Sprintf(format, v...))
 }
 func (l *ormLogger) Info(v ...interface{}) {
-	logger.Info.Print(v...)
+	logger.Info.Output(2, fmt.Sprint(v...))
 }
 func (l *ormLogger) Infof(format string, v ...interface{}) {
 	if strings.HasPrefix(format, "PING DATABASE") {
 		return
 	}
-	logger.Info.Printf(format, v...)
+	logger.Info.Output(2, fmt.Sprintf(format, v...))
 }
 func (l *ormLogger) Warn(v ...interface{}) {
-	logger.Warning.Print(v...)
+	logger.Warning.Output(2, fmt.Sprint(v...))
 }
 func (l *ormLogger) Warnf(format string, v ...interface{}) {
-	logger.Warning.Printf(format, v...)
+	logger.Warning.Output(2, fmt.Sprintf(format, v...))
 }
 
 func (l *ormLogger) Level() log.LogLevel {

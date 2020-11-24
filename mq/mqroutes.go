@@ -64,7 +64,7 @@ func InitMQRoutesEnv(configFile string) (*RoutesEnv, error) {
 	}
 	err = yamlutils.LoadConfig(path.Join(cfgDir, "local."+cfgFile), &mqRoutesEnv)
 	if !cfgLoaded && err != nil {
-		logger.Error.Println("Please check the ess configure file and restart.")
+		logger.Error.Println("Please check the mq configure file and restart.")
 	} else {
 		cfgLoaded = true
 	}
