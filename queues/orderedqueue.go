@@ -241,7 +241,6 @@ func (q *OrderedQueue) CutBefore(idx int) []IElement {
 func (q *OrderedQueue) CutAfter(idx int) []IElement {
 	q.m.Lock()
 	if 0 > idx {
-		q.m.Lock()
 		cuts := q.queue
 		q.queue = []IElement{}
 		q.m.Unlock()
