@@ -64,10 +64,11 @@ func (q *OrderedQueue) Push(item IElement) bool {
 
 // Pop first item
 func (q *OrderedQueue) Pop() (interface{}, bool) {
-	if q.GetSize() <= 0 {
+	q.m.Lock()
+	if len(q.queue) <= 0 {
+		q.m.Unlock()
 		return nil, false
 	}
-	q.m.Lock()
 	item := q.queue[0]
 	q.queue = append([]IElement{}, q.queue[1:]...)
 	q.m.Unlock()
@@ -76,15 +77,16 @@ func (q *OrderedQueue) Pop() (interface{}, bool) {
 
 // PopMany head elements from queue limited by maxResults, the element would be deleted from queue
 func (q *OrderedQueue) PopMany(maxResults int) ([]interface{}, int) {
-	maxLen := q.GetSize()
+	q.m.Lock()
+	maxLen := len(q.queue)
 	if 0 >= maxLen || 0 >= maxResults {
+		q.m.Unlock()
 		return nil, 0
 	}
 
 	if maxLen > maxResults {
 		maxLen = maxResults
 	}
-	q.m.Lock()
 	items := make([]interface{}, maxLen)
 	for i := 0; i < maxLen; i++ {
 		items[i] = q.queue[i]
@@ -96,10 +98,11 @@ func (q *OrderedQueue) PopMany(maxResults int) ([]interface{}, int) {
 
 // First item without pop
 func (q *OrderedQueue) First() (interface{}, bool) {
-	if q.GetSize() <= 0 {
+	q.m.RLock()
+	if len(q.queue) <= 0 {
+		q.m.RUnlock()
 		return nil, false
 	}
-	q.m.RLock()
 	item := q.queue[0]
 	q.m.RUnlock()
 	return item, true
@@ -108,11 +111,12 @@ func (q *OrderedQueue) First() (interface{}, bool) {
 // Remove an element from queue identified by element.GetID()
 func (q *OrderedQueue) Remove(item IElement) bool {
 	// fmt.Printf("Removing element %s finding...\n", item.GetID())
+	q.m.Lock()
 	idx := q.findElementIndex(item)
 	if 0 > idx {
+		q.m.Unlock()
 		return false
 	}
-	q.m.Lock()
 	q.queue = append(q.queue[0:idx], q.queue[idx+1:]...)
 	q.m.Unlock()
 	return true
@@ -129,7 +133,9 @@ func (q *OrderedQueue) Elements() []IElement {
 // GetOne an element from queue identified by element.GetID()
 func (q *OrderedQueue) GetOne(item IElement) (interface{}, bool) {
 	// fmt.Printf("Removing element %s finding...\n", item.GetID())
+	q.m.RLock()
 	idx := q.findElementIndex(item)
+	q.m.RUnlock()
 	if 0 > idx {
 		return item, false
 	}
@@ -159,10 +165,8 @@ func (q *OrderedQueue) FindElements(cmp *definations.ComparisonObject) []IElemen
 }
 
 func (q *OrderedQueue) findElementIndex(item IElement) int {
-	q.m.Lock()
 	l := len(q.queue)
 	if 0 >= l {
-		q.m.Unlock()
 		return -1
 	}
 	idx := findOrderedQueueInsertingIndex(&q.queue, l, item, q.ordering)
@@ -177,7 +181,6 @@ func (q *OrderedQueue) findElementIndex(item IElement) int {
 	}
 	for cursor < max {
 		if item.GetID() == q.queue[cursor].GetID() {
-			q.m.Unlock()
 			return cursor
 		}
 		cursor++
@@ -185,12 +188,10 @@ func (q *OrderedQueue) findElementIndex(item IElement) int {
 	cursor = idx - 1
 	for cursor > min {
 		if item.GetID() == q.queue[cursor].GetID() {
-			q.m.Unlock()
 			return cursor
 		}
 		cursor--
 	}
-	q.m.Unlock()
 	return -1
 }
 
@@ -222,14 +223,14 @@ func (q *OrderedQueue) Dump() string {
 func (q *OrderedQueue) CutBefore(idx int) []IElement {
 	if 0 > idx {
 		return []IElement{}
-	} else if q.GetSize() >= idx {
-		q.m.Lock()
+	}
+	q.m.Lock()
+	if len(q.queue) >= idx {
 		cuts := q.queue
 		q.queue = []IElement{}
 		q.m.Unlock()
 		return cuts
 	}
-	q.m.Lock()
 	cuts := q.queue[:idx]
 	q.queue = q.queue[idx:]
 	q.m.Unlock()
@@ -238,16 +239,17 @@ func (q *OrderedQueue) CutBefore(idx int) []IElement {
 
 // CutAfter cut elements out after index
 func (q *OrderedQueue) CutAfter(idx int) []IElement {
+	q.m.Lock()
 	if 0 > idx {
 		q.m.Lock()
 		cuts := q.queue
 		q.queue = []IElement{}
 		q.m.Unlock()
 		return cuts
-	} else if q.GetSize() >= idx {
+	} else if len(q.queue) >= idx {
+		q.m.Unlock()
 		return []IElement{}
 	}
-	q.m.Lock()
 	cuts := q.queue[idx+1:]
 	q.queue = q.queue[:idx+1]
 	q.m.Unlock()

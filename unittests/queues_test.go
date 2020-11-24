@@ -80,7 +80,7 @@ func testQueueOperatesInCoroutine() error {
 	finishCount := 0
 
 	go func() {
-		for i := 0; i < 500; i++ {
+		for i := 0; i < 50000; i++ {
 			queue1.Push(&demoElement{val: utils.RandomString(4), ordering: int64(utils.RandomInt(990))})
 			queue2.First()
 			queue2.Pop()
@@ -88,7 +88,7 @@ func testQueueOperatesInCoroutine() error {
 		finish <- "go1"
 	}()
 	go func() {
-		for i := 0; i < 500; i++ {
+		for i := 0; i < 50000; i++ {
 			queue2.Push(&demoElement{val: utils.RandomString(4), ordering: int64(utils.RandomInt(990))})
 			queue1.First()
 			queue1.Pop()
