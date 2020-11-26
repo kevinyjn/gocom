@@ -49,6 +49,10 @@ func InitServiceHandler(app *iris.Application) error {
 		return err
 	}
 
+	for mqInstance := range mq.GetAllMQDriverConfigs() {
+		logger.Debug.Printf("category:%s on instance:%s", mq.FindOneCategoryNameByInstance(mqInstance), mqInstance)
+	}
+
 	go func() {
 		ticker1 := time.NewTimer(time.Second * 3)
 		ticker2 := time.NewTicker(time.Second * 13)
