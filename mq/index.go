@@ -3,6 +3,7 @@ package mq
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq/kafka"
@@ -22,8 +23,14 @@ const (
 	MQEventCodeFailed = mqenv.MQEventCodeFailed
 )
 
-var mqCategoryDrivers = map[string]string{}
-var mqConnConfigs = map[string]mqenv.MQConnectorConfig{}
+var (
+	mqCategoryDrivers           = map[string]string{}
+	mqCategoriesByInstance      = map[string]map[string]bool{}
+	mqConnConfigs               = map[string]mqenv.MQConnectorConfig{}
+	mqCategoryDriversMutex      = sync.RWMutex{}
+	mqCategoriesByInstanceMutex = sync.RWMutex{}
+	mqConnConfigsMutex          = sync.RWMutex{}
+)
 
 // Init initializer
 func Init(mqConfigFile string, mqDriverConfigs map[string]mqenv.MQConnectorConfig) error {
@@ -33,10 +40,12 @@ func Init(mqConfigFile string, mqDriverConfigs map[string]mqenv.MQConnectorConfi
 	}
 	if nil != mqDriverConfigs {
 		for connName, cfg := range mqDriverConfigs {
+			mqConnConfigsMutex.Lock()
 			_, ok := mqConnConfigs[connName]
 			if false == ok {
 				mqConnConfigs[connName] = cfg
 			}
+			mqConnConfigsMutex.Unlock()
 		}
 	}
 	return InitWithMQRoutes(mqRoutesEnv, mqDriverConfigs)
@@ -61,22 +70,34 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 	}
 	instCnf, ok := mqDriverConfigs[topicConfig.Instance]
 	if false == ok {
+		mqConnConfigsMutex.RLock()
 		instCnf, ok = mqConnConfigs[topicConfig.Instance]
+		mqConnConfigsMutex.RUnlock()
 		if false == ok {
 			logger.Error.Printf("Initialize mq:%s with connection instance:%s failed, the instance not configured.", topicCategory, topicConfig.Instance)
 			return fmt.Errorf("Initialize mq:%s with connection instance:%s failed, the instance not configured", topicCategory, topicConfig.Instance)
 		}
 	} else {
+		mqConnConfigsMutex.Lock()
 		_, ok = mqConnConfigs[topicConfig.Instance]
 		if false == ok {
 			mqConnConfigs[topicConfig.Instance] = instCnf
 		}
+		mqConnConfigsMutex.Unlock()
 	}
 	if nil == GetMQConfig(topicCategory) {
 		GetMQRoutes()[topicCategory] = *topicConfig
 	}
 	var initErr error
+	mqCategoryDriversMutex.Lock()
 	mqCategoryDrivers[topicCategory] = instCnf.Driver
+	mqCategoryDriversMutex.Unlock()
+	mqCategoriesByInstanceMutex.Lock()
+	if mqCategoriesByInstance[topicConfig.Instance] == nil {
+		mqCategoriesByInstance[topicConfig.Instance] = map[string]bool{}
+	}
+	mqCategoriesByInstance[topicConfig.Instance][topicCategory] = true
+	mqCategoriesByInstanceMutex.Unlock()
 	if instCnf.Driver == mqenv.DriverTypeAMQP {
 		amqpCfg := &rabbitmq.AMQPConfig{
 			ConnConfigName:  topicConfig.Instance,
@@ -110,12 +131,29 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 // GetAllMQDriverConfigs configs
 func GetAllMQDriverConfigs() map[string]mqenv.MQConnectorConfig {
 	result := map[string]mqenv.MQConnectorConfig{}
+	mqConnConfigsMutex.RLock()
 	if nil != mqConnConfigs {
 		for connName, cfg := range mqConnConfigs {
 			result[connName] = cfg
 		}
 	}
+	mqConnConfigsMutex.RUnlock()
 	return result
+}
+
+// FindOneCategoryNameByInstance first hit category
+func FindOneCategoryNameByInstance(instanceName string) string {
+	category := ""
+	mqCategoriesByInstanceMutex.RLock()
+	categories, ok := mqCategoriesByInstance[instanceName]
+	mqCategoriesByInstanceMutex.RUnlock()
+	if ok {
+		for key := range categories {
+			category = key
+			break
+		}
+	}
+	return category
 }
 
 // InitMQWithRPC init mq with RPC
@@ -124,9 +162,17 @@ func InitMQWithRPC(topicCategory string, rpcType int, connCfg *mqenv.MQConnector
 		return fmt.Errorf("Initialize mq rpc with key:%s rpc_type:%d failed, invalid conn_cofig or invalid mq_config", topicCategory, rpcType)
 	}
 	if connCfg.Driver == mqenv.DriverTypeAMQP {
+		mqCategoryDriversMutex.Lock()
 		if "" == mqCategoryDrivers[topicCategory] {
 			mqCategoryDrivers[topicCategory] = connCfg.Driver
 		}
+		mqCategoryDriversMutex.Unlock()
+		mqCategoriesByInstanceMutex.Lock()
+		if mqCategoriesByInstance[mqCfg.Instance] == nil {
+			mqCategoriesByInstance[mqCfg.Instance] = map[string]bool{}
+		}
+		mqCategoriesByInstance[mqCfg.Instance][topicCategory] = true
+		mqCategoriesByInstanceMutex.Unlock()
 		if nil == GetMQConfig(topicCategory) {
 			GetMQRoutes()[topicCategory] = *mqCfg
 		}
@@ -166,7 +212,9 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 	if nil == mqConfig {
 		return fmt.Errorf("Consume MQ with invalid category:%s", mqCategory)
 	}
+	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
+	mqCategoryDriversMutex.RUnlock()
 	if mqenv.DriverTypeAMQP == mqDriver {
 		if mqConfig.RPCEnabled {
 			rpcInst := rabbitmq.GetRPCRabbitMQWithoutConnectedChecking(mqCategory)
@@ -204,7 +252,9 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 	if nil == mqConfig {
 		return fmt.Errorf("Publish MQ with invalid category:%s", mqCategory)
 	}
+	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
+	mqCategoryDriversMutex.RUnlock()
 	if mqenv.DriverTypeAMQP == mqDriver {
 		if mqConfig.RPCEnabled {
 			rpcInst := rabbitmq.GetRPCRabbitMQ(mqCategory)
@@ -239,7 +289,9 @@ func QueryMQRPC(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsume
 	if nil == mqConfig {
 		return nil, fmt.Errorf("Query RPC MQ with invalid category:%s", mqCategory)
 	}
+	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
+	mqCategoryDriversMutex.RUnlock()
 	if mqenv.DriverTypeAMQP == mqDriver {
 		inst, err := rabbitmq.GetRabbitMQ(mqCategory)
 		if nil != err {
