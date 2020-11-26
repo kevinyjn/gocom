@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kevinyjn/gocom/logger"
@@ -19,13 +20,16 @@ import (
 
 // Variables
 var (
-	amqpInsts           = map[string]*RabbitMQ{}
-	trackerQueue string = ""
+	amqpInsts            = map[string]*RabbitMQ{}
+	trackerQueue  string = ""
+	amqpInstMutex        = sync.RWMutex{}
 )
 
 // InitRabbitMQ init
 func InitRabbitMQ(mqConnName string, connCfg *mqenv.MQConnectorConfig, amqpCfg *AMQPConfig) (*RabbitMQ, error) {
+	amqpInstMutex.RLock()
 	amqpInst, ok := amqpInsts[mqConnName]
+	amqpInstMutex.RUnlock()
 	if ok && !amqpInst.Config.Equals(amqpCfg) {
 		amqpInst.close()
 		close(amqpInst.Close)
@@ -33,7 +37,9 @@ func InitRabbitMQ(mqConnName string, connCfg *mqenv.MQConnectorConfig, amqpCfg *
 	}
 	if !ok {
 		amqpInst = NewRabbitMQ(mqConnName, connCfg, amqpCfg)
+		amqpInstMutex.Lock()
 		amqpInsts[mqConnName] = amqpInst
+		amqpInstMutex.Unlock()
 		err := amqpInst.init()
 		if err == nil {
 			go amqpInst.Run()
@@ -46,7 +52,9 @@ func InitRabbitMQ(mqConnName string, connCfg *mqenv.MQConnectorConfig, amqpCfg *
 
 // GetRabbitMQ get
 func GetRabbitMQ(name string) (*RabbitMQ, error) {
+	amqpInstMutex.RLock()
 	amqpInst, ok := amqpInsts[name]
+	amqpInstMutex.RUnlock()
 	if ok {
 		return amqpInst, nil
 	}
@@ -177,6 +185,8 @@ func (r *RabbitMQ) initWithParameters(mqConnName string, connCfg *mqenv.MQConnec
 	r.rpcInstanceName = fmt.Sprintf("@rpc-%s", r.Config.ConnConfigName)
 	r.rpcCallbacks = make(map[string]*mqenv.MQPublishMessage)
 	r.pendingReplies = make(map[string]amqp.Delivery)
+	r.rpcCallbacksMutex = sync.RWMutex{}
+	r.pendingRepliesMutex = sync.RWMutex{}
 	hostName, err := os.Hostname()
 	if nil != err {
 		logger.Error.Printf("RabbitMQ %s initialize while get hostname failed with error:%v", r.Name, err)
@@ -330,7 +340,7 @@ func (r *RabbitMQ) initConn() error {
 
 	go func() {
 		ticker := time.NewTicker(AMQPReconnectDuration * time.Second)
-		for {
+		for nil != ticker {
 			select {
 			case <-ticker.C:
 				if conn, err := dial(connDSN); err != nil {
@@ -342,6 +352,8 @@ func (r *RabbitMQ) initConn() error {
 					logger.Info.Printf("Connecting rabbitmq %s succeed", connDescription)
 					r.connecting = false
 					r.Conn = conn
+					r.connClosed = make(chan *amqp.Error)
+					r.Conn.NotifyClose(r.connClosed)
 					ticker.Stop()
 					r.Channel, err = createChannel(conn, r.Config)
 					if err != nil {
@@ -350,9 +362,7 @@ func (r *RabbitMQ) initConn() error {
 						logger.Fatal.Printf("create channel failed with error:%v", err)
 						return
 					}
-					r.connClosed = make(chan *amqp.Error)
 					r.channelClosed = make(chan *amqp.Error)
-					r.Conn.NotifyClose(r.connClosed)
 					r.Channel.NotifyClose(r.channelClosed)
 
 					if r.Config.IsBroadcastExange() && len(r.consumers) <= 0 && len(r.pendingConsumers) <= 0 {
@@ -411,8 +421,7 @@ func (r *RabbitMQ) ensureQueue() error {
 	}
 	queue, err := createQueue(r.Channel, r.Config)
 	if err != nil {
-		r.Conn.Close()
-		r.Conn = nil
+		r.close()
 		logger.Fatal.Printf("create queue:%s failed with error:%v", r.Config.Queue, err)
 		return err
 	}
@@ -572,18 +581,17 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliveries <-chan amqp.Delivery) {
 	for d := range deliveries {
 		if logger.IsDebugEnabled() {
-			if strings.HasPrefix(d.RoutingKey, "healthz") {
-				// skip the healthz checking log
-				continue
+			// skip the healthz checking log
+			if false == strings.HasPrefix(d.RoutingKey, "healthz") {
+				logger.Trace.Printf(
+					"got %dB delivery: [%v] from rk:%s(%s) %s",
+					len(d.Body),
+					d.DeliveryTag,
+					d.RoutingKey,
+					d.Exchange,
+					d.Body,
+				)
 			}
-			logger.Trace.Printf(
-				"got %dB delivery: [%v] from rk:%s(%s) %s",
-				len(d.Body),
-				d.DeliveryTag,
-				d.RoutingKey,
-				d.Exchange,
-				d.Body,
-			)
 		}
 		// fmt.Println("---- got delivery message d:", d)
 		go r.handleConsumeCallback(d, cb, autoAck)
@@ -596,7 +604,9 @@ func (r *RabbitMQ) getRPCInstance() (*RabbitMQ, error) {
 		logger.Error.Printf("%s rabbitmq instance get RPC instance failed that connection configuration empty", r.Name)
 		return nil, fmt.Errorf("connection configuration nil")
 	}
+	amqpInstMutex.RLock()
 	rpcInst, ok := amqpInsts[r.rpcInstanceName]
+	amqpInstMutex.RUnlock()
 	if ok {
 		return rpcInst, nil
 	}
@@ -639,7 +649,9 @@ func (r *RabbitMQ) getRPCInstance() (*RabbitMQ, error) {
 	if nil != err {
 		logger.Error.Printf("%s consume rpc failed with error:%v", rpcInst.Name, err)
 	}
+	amqpInstMutex.Lock()
 	amqpInsts[r.rpcInstanceName] = rpcInst
+	amqpInstMutex.Unlock()
 	return rpcInst, nil
 }
 
@@ -648,6 +660,7 @@ func (r *RabbitMQ) ensureRPCMessage(pm *mqenv.MQPublishMessage) {
 		pm.CorrelationID = genCorrelationID()
 	}
 	pm.ReplyTo = r.queueName
+	r.rpcCallbacksMutex.Lock()
 	if nil == r.rpcCallbacks {
 		r.rpcCallbacks = make(map[string]*mqenv.MQPublishMessage)
 	}
@@ -655,6 +668,7 @@ func (r *RabbitMQ) ensureRPCMessage(pm *mqenv.MQPublishMessage) {
 	if nil == originPm || originPm.Response == nil {
 		r.rpcCallbacks[pm.CorrelationID] = pm
 	}
+	r.rpcCallbacksMutex.Unlock()
 }
 
 func (r *RabbitMQ) handleConsumeCallback(d amqp.Delivery, cb AMQPConsumerCallback, autoAck bool) {
@@ -717,7 +731,9 @@ func (r *RabbitMQ) handleRPCCallback(d amqp.Delivery) *mqenv.MQPublishMessage {
 		return nil
 	}
 	correlationID := d.CorrelationId
+	r.rpcCallbacksMutex.RLock()
 	pm, pmExists := r.rpcCallbacks[correlationID]
+	r.rpcCallbacksMutex.RUnlock()
 	if pmExists {
 		if pm.CallbackEnabled() {
 			// fmt.Printf("====> push back response data %s %+v\n", correlationID, pm)
@@ -726,7 +742,9 @@ func (r *RabbitMQ) handleRPCCallback(d amqp.Delivery) *mqenv.MQPublishMessage {
 			resp.ReplyTo = pm.ReplyTo
 			pm.Response <- *resp
 		}
+		r.rpcCallbacksMutex.Lock()
 		delete(r.rpcCallbacks, correlationID)
+		r.rpcCallbacksMutex.Unlock()
 		d.Ack(false)
 	} else {
 		d.Ack(false)
@@ -736,27 +754,33 @@ func (r *RabbitMQ) handleRPCCallback(d amqp.Delivery) *mqenv.MQPublishMessage {
 
 func (r *RabbitMQ) setReplyNeededMessage(d amqp.Delivery) {
 	if "" != d.CorrelationId && "" != d.ReplyTo {
+		r.pendingRepliesMutex.Lock()
 		if nil == r.pendingReplies {
 			r.pendingReplies = make(map[string]amqp.Delivery)
 		}
 		r.pendingReplies[d.CorrelationId] = d
+		r.pendingRepliesMutex.Unlock()
 	}
 }
 
 func (r *RabbitMQ) answerReplyNeededMessage(correlationID string) {
+	r.pendingRepliesMutex.Lock()
 	if "" != correlationID && nil != r.pendingReplies {
 		_, exists := r.pendingReplies[correlationID]
 		if exists {
 			delete(r.pendingReplies, correlationID)
 		}
 	}
+	r.pendingRepliesMutex.Unlock()
 }
 
 func (r *RabbitMQ) isReplyNeededMessageAnswered(correlationID string) bool {
 	if "" == correlationID || nil == r.pendingReplies {
 		return true
 	}
+	r.pendingRepliesMutex.RLock()
 	_, exists := r.pendingReplies[correlationID]
+	r.pendingRepliesMutex.RUnlock()
 	return false == exists
 }
 

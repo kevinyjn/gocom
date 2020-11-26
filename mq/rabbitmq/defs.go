@@ -1,6 +1,8 @@
 package rabbitmq
 
 import (
+	"sync"
+
 	"github.com/kevinyjn/gocom/mq/mqenv"
 	"github.com/kevinyjn/gocom/netutils/sshtunnel"
 
@@ -62,21 +64,23 @@ type RabbitMQ struct {
 	Close       chan interface{}
 	QueueStatus *RabbitQueueStatus
 
-	connClosed       chan *amqp.Error
-	channelClosed    chan *amqp.Error
-	consumers        []*RabbitConsumerProxy
-	pendingConsumers []*RabbitConsumerProxy
-	pendingPublishes []*mqenv.MQPublishMessage
-	connecting       bool
-	queueName        string
-	queue            *amqp.Queue
-	sshTunnel        *sshtunnel.TunnelForwarder
-	afterEnsureQueue func()
-	beforePublish    func(*mqenv.MQPublishMessage) (string, string)
-	hostName         string
-	rpcInstanceName  string
-	rpcCallbacks     map[string]*mqenv.MQPublishMessage
-	pendingReplies   map[string]amqp.Delivery
+	connClosed          chan *amqp.Error
+	channelClosed       chan *amqp.Error
+	consumers           []*RabbitConsumerProxy
+	pendingConsumers    []*RabbitConsumerProxy
+	pendingPublishes    []*mqenv.MQPublishMessage
+	connecting          bool
+	queueName           string
+	queue               *amqp.Queue
+	sshTunnel           *sshtunnel.TunnelForwarder
+	afterEnsureQueue    func()
+	beforePublish       func(*mqenv.MQPublishMessage) (string, string)
+	hostName            string
+	rpcInstanceName     string
+	rpcCallbacks        map[string]*mqenv.MQPublishMessage
+	pendingReplies      map[string]amqp.Delivery
+	rpcCallbacksMutex   sync.RWMutex
+	pendingRepliesMutex sync.RWMutex
 }
 
 // RabbitRPC rpc instance

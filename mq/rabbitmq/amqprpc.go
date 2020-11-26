@@ -125,6 +125,10 @@ func (r *RabbitRPC) ensureRPCCorrelationID(pm *mqenv.MQPublishMessage) (string, 
 	if nil == originPm || originPm.Response == nil {
 		_cbs[pm.CorrelationID] = pm
 	}
+	// exchangeName, routingKey := pm.Exchange, pm.RoutingKey
+	// if "" != routingKey {
+	// 	return exchangeName, routingKey
+	// }
 	return "", r.queueName
 }
 

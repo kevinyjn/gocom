@@ -3,6 +3,7 @@ package healthz
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/kevinyjn/gocom"
@@ -33,13 +34,15 @@ type PingableSession interface {
 type mqCheckListWrapper struct {
 	categories map[string]string
 	trigger    chan LivenessCheckResult
+	m          sync.RWMutex
 }
 
 var (
-	livenessTickerCache     = map[string]*mqCheckListWrapper{}
-	mqChecks                = mqCheckListWrapper{categories: map[string]string{}}
-	customizedHealthzChecks []config.HealthzChecks
-	traceLog                = false
+	livenessTickerCache      = map[string]*mqCheckListWrapper{}
+	mqChecks                 = mqCheckListWrapper{categories: map[string]string{}, m: sync.RWMutex{}}
+	customizedHealthzChecks  []config.HealthzChecks
+	traceLog                 = false
+	livenessTickerCacheMutex = sync.RWMutex{}
 )
 
 // InitHealthz register iris healthz handler
@@ -68,11 +71,19 @@ func (c *mqCheckListWrapper) CheckConsumers(trigger chan LivenessCheckResult, mq
 		categories: map[string]string{},
 		trigger:    trigger,
 	}
+	checkCategories := map[string]bool{}
+	c.m.RLock()
 	for category := range c.categories {
+		checkCategories[category] = true
+	}
+	c.m.RUnlock()
+	for category := range checkCategories {
 		val := checkMQMessage(category, trigger, mqEvent)
 		if "" != val {
 			checkInst.categories[category] = val
+			livenessTickerCacheMutex.Lock()
 			livenessTickerCache[val] = checkInst
+			livenessTickerCacheMutex.Unlock()
 		}
 	}
 	return checkInst
@@ -80,48 +91,74 @@ func (c *mqCheckListWrapper) CheckConsumers(trigger chan LivenessCheckResult, mq
 
 // NotEmpty check
 func (c *mqCheckListWrapper) NotEmpty() bool {
+	c.m.RLock()
 	for range c.categories {
+		c.m.RUnlock()
 		return true
 	}
+	c.m.RUnlock()
 	return false
 }
 
 // Remove by category
 func (c *mqCheckListWrapper) Remove(category string, eventStatus string) {
+	c.m.RLock()
 	val, ok := c.categories[category]
+	c.m.RUnlock()
 	if ok {
+		livenessTickerCacheMutex.Lock()
 		_, ok = livenessTickerCache[val]
 		if ok {
 			delete(livenessTickerCache, val)
 		}
+		livenessTickerCacheMutex.Unlock()
+		c.m.Lock()
 		delete(c.categories, category)
 		checkResult := LivenessCheckResult{
 			Name:   category,
 			Status: eventStatus,
 		}
+		c.m.Unlock()
 		go pushLivenessCheckEvent(c.trigger, checkResult)
 	}
 }
 
 // RemoveBySerialNo remove by value mapped by category
 func (c *mqCheckListWrapper) RemoveBySerialNo(sn string, eventStatus string) {
+	removeCategory := ""
+	isFound := false
+	c.m.RLock()
 	for category, val := range c.categories {
 		if sn == val {
-			c.Remove(category, eventStatus)
+			removeCategory = category
+			isFound = true
 			break
 		}
+	}
+	c.m.RUnlock()
+	if isFound {
+		c.Remove(removeCategory, eventStatus)
 	}
 }
 
 // Clear all
 func (c *mqCheckListWrapper) Clear(eventStatus string) {
 	clears := map[string]string{}
+	c.m.RLock()
 	for category, val := range c.categories {
 		clears[category] = val
 	}
+	c.m.RUnlock()
 	for category := range clears {
 		c.Remove(category, eventStatus)
 	}
+}
+
+// SetCategory value
+func (c *mqCheckListWrapper) SetCategory(category string, value string) {
+	c.m.Lock()
+	c.categories[category] = value
+	c.m.Unlock()
 }
 
 func handlerHealthz(ctx iris.Context) {
@@ -254,7 +291,7 @@ func initHealthzMQConsumer() {
 			} else {
 				logger.Info.Printf("MQ healthz consumer %s initialized.", category)
 			}
-			mqChecks.categories[category] = ""
+			mqChecks.SetCategory(category, "")
 		} else {
 			logger.Error.Printf("Initialize %s healthz topic failed with error:%v", category, err)
 		}
@@ -266,10 +303,14 @@ func handleHealthzConsumer(msg mqenv.MQConsumerMessage) *mqenv.MQPublishMessage 
 		logger.Trace.Printf("Got mq %s %s check key:%s value:%s", msg.Driver, msg.Queue, msg.RoutingKey, string(msg.Body))
 	}
 	cacherKey := string(msg.Body)
+	livenessTickerCacheMutex.RLock()
 	ev, ok := livenessTickerCache[cacherKey]
+	livenessTickerCacheMutex.RUnlock()
 	if ok {
 		// fmt.Printf("trigger liveness event for key:%s", cacherKey)
+		livenessTickerCacheMutex.Lock()
 		delete(livenessTickerCache, cacherKey)
+		livenessTickerCacheMutex.Unlock()
 		ev.RemoveBySerialNo(cacherKey, "success")
 	} else {
 		// fmt.Printf("got mq %s %s message while could not find trigger by key:%s", msg.Driver, msg.Queue, cacherKey)

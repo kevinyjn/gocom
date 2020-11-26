@@ -15,6 +15,7 @@ import (
 // InitServiceHandler initialize
 func InitServiceHandler(app *iris.Application) error {
 	healthz.InitHealthz(app)
+	healthz.SetTraceLog(true)
 	app.Get("/test", testPublishWebMessage)
 
 	mqTopic := "biz-consumer"
@@ -50,7 +51,7 @@ func InitServiceHandler(app *iris.Application) error {
 
 	go func() {
 		ticker1 := time.NewTimer(time.Second * 3)
-		ticker2 := time.NewTicker(time.Second * 3)
+		ticker2 := time.NewTicker(time.Second * 13)
 		for {
 			select {
 			case <-ticker1.C:
@@ -111,9 +112,10 @@ func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) *mqenv.MQPublishMessa
 
 func testPublishRPCMessage() {
 	pm := &mqenv.MQPublishMessage{
-		Body:     []byte("Testing data"),
-		Response: make(chan mqenv.MQConsumerMessage),
-		ReplyTo:  mq.GetMQConfig("rpc-consumer").Queue,
+		RoutingKey: "demo.bindings.amqprpc",
+		Body:       []byte("Testing data"),
+		Response:   make(chan mqenv.MQConsumerMessage),
+		ReplyTo:    mq.GetMQConfig("rpc-consumer").Queue,
 	}
 	err := mq.PublishMQ("demo", pm)
 	if nil != err {
