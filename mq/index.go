@@ -141,6 +141,20 @@ func GetAllMQDriverConfigs() map[string]mqenv.MQConnectorConfig {
 	return result
 }
 
+// GetAllCategoryNamesByInstance by instancename
+func GetAllCategoryNamesByInstance(instanceName string) []string {
+	result := []string{}
+	mqCategoriesByInstanceMutex.RLock()
+	categories, ok := mqCategoriesByInstance[instanceName]
+	if ok {
+		for key := range categories {
+			result = append(result, key)
+		}
+	}
+	mqCategoriesByInstanceMutex.RUnlock()
+	return result
+}
+
 // FindOneCategoryNameByInstance first hit category
 func FindOneCategoryNameByInstance(instanceName string) string {
 	category := ""

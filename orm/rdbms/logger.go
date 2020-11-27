@@ -14,32 +14,32 @@ type ormLogger struct {
 }
 
 func (l *ormLogger) Debug(v ...interface{}) {
-	// logger.Debug.Output(2, fmt.Sprint(v...))
+	// logger.Debug.Output(3, fmt.Sprint(v...))
 }
 
 func (l *ormLogger) Debugf(format string, v ...interface{}) {
-	// logger.Debug.Output(2, fmt.Sprintf(format, v...))
+	// logger.Debug.Output(3, fmt.Sprintf(format, v...))
 }
 func (l *ormLogger) Error(v ...interface{}) {
-	logger.Error.Output(2, fmt.Sprint(v...))
+	logger.Error.Output(3, fmt.Sprint(v...))
 }
 func (l *ormLogger) Errorf(format string, v ...interface{}) {
-	logger.Error.Output(2, fmt.Sprintf(format, v...))
+	logger.Error.Output(3, fmt.Sprintf(format, v...))
 }
 func (l *ormLogger) Info(v ...interface{}) {
-	logger.Info.Output(2, fmt.Sprint(v...))
+	logger.Info.Output(3, fmt.Sprint(v...))
 }
 func (l *ormLogger) Infof(format string, v ...interface{}) {
 	if strings.HasPrefix(format, "PING DATABASE") {
 		return
 	}
-	logger.Info.Output(2, fmt.Sprintf(format, v...))
+	logger.Info.Output(3, fmt.Sprintf(format, v...))
 }
 func (l *ormLogger) Warn(v ...interface{}) {
-	logger.Warning.Output(2, fmt.Sprint(v...))
+	logger.Warning.Output(3, fmt.Sprint(v...))
 }
 func (l *ormLogger) Warnf(format string, v ...interface{}) {
-	logger.Warning.Output(2, fmt.Sprintf(format, v...))
+	logger.Warning.Output(3, fmt.Sprintf(format, v...))
 }
 
 func (l *ormLogger) Level() log.LogLevel {

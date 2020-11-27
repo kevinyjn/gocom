@@ -50,7 +50,9 @@ func InitServiceHandler(app *iris.Application) error {
 	}
 
 	for mqInstance := range mq.GetAllMQDriverConfigs() {
-		logger.Debug.Printf("category:%s on instance:%s", mq.FindOneCategoryNameByInstance(mqInstance), mqInstance)
+		for _, name := range mq.GetAllCategoryNamesByInstance(mqInstance) {
+			logger.Debug.Printf("category:%s on instance:%s", name, mqInstance)
+		}
 	}
 
 	go func() {
