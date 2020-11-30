@@ -17,14 +17,22 @@ import (
 
 	"github.com/kevinyjn/gocom/definations"
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/queues"
 	"github.com/kevinyjn/gocom/utils"
 )
 
+// Constants
+const (
+	RetryDurationFactor = 5
+)
+
 type httpClientOption struct {
-	headers    map[string]string
-	tlsOptions *definations.TLSOptions
-	proxies    *definations.Proxies
-	timeouts   time.Duration
+	headers     map[string]string
+	tlsOptions  *definations.TLSOptions
+	proxies     *definations.Proxies
+	timeouts    time.Duration
+	retries     int // retry times that already executed
+	shouldRetry int // retry times that caller expectes
 }
 
 // ClientOption http client option
@@ -115,6 +123,13 @@ func WithHTTPProxies(proxies *definations.Proxies) ClientOption {
 func WithTimeout(timeoutSeconds int) ClientOption {
 	return newFuncHTTPClientOption(func(o *httpClientOption) {
 		o.timeouts = time.Duration(timeoutSeconds) * time.Second
+	})
+}
+
+// WithRetry options
+func WithRetry(shouldRetryTimes int) ClientOption {
+	return newFuncHTTPClientOption(func(o *httpClientOption) {
+		o.shouldRetry = shouldRetryTimes
 	})
 }
 
@@ -326,9 +341,11 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 		client.Timeout = opts.timeouts
 	}
 
+	// logger.Trace.Printf("querying %s...", queryURL)
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Error.Printf("query %s failed with error:%v", queryURL, err)
+		afterQueryFailed(-1, err, []byte(err.Error()), method, queryURL, body, &opts)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -336,13 +353,136 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error.Printf("Read result by queried url:%s failed with error:%v", queryURL, err)
+		afterQueryFailed(resp.StatusCode, err, []byte(err.Error()), method, queryURL, body, &opts)
 		return nil, err
 	}
 
 	if resp.StatusCode != 200 {
-		logger.Error.Printf("Error: query %s failed with error:%s body:%s", queryURL, resp.Status, string(respBody))
-		return nil, errors.New(resp.Status)
+		if resp.StatusCode == http.StatusMovedPermanently || resp.StatusCode == http.StatusFound {
+			newLocation := resp.Header.Get("location")
+			logger.Info.Printf("query %s while got status:%d for location:%s", queryURL, resp.StatusCode, newLocation)
+			if "" != newLocation {
+				return HTTPQuery(method, newLocation, body, options...)
+			}
+		}
+		err = errors.New(resp.Status)
+		afterQueryFailed(resp.StatusCode, err, respBody, method, queryURL, body, &opts)
+		return nil, err
+	}
+
+	if opts.retries > 0 {
+		logger.Info.Printf("query %s with method:%s succeed with %d retries", queryURL, method, opts.retries)
 	}
 
 	return respBody, nil
+}
+
+func afterQueryFailed(respStatusCode int, err error, respBody []byte, method string, queryURL string, body io.Reader, opts *httpClientOption) {
+	logger.Error.Output(2, fmt.Sprintf("Error: query %s failed with error(code:%d):%v body:%s", queryURL, respStatusCode, err, string(respBody)))
+	if opts.shouldRetry > 0 {
+		if opts.retries >= opts.shouldRetry {
+			logger.Error.Printf("query %s failed with %d retries, skip retring", queryURL, opts.retries)
+			return
+		}
+		var reqBody []byte
+		if nil != body {
+			reqBody, err = ioutil.ReadAll(body)
+			if nil != err {
+				logger.Error.Printf("format http retry request while get request body content failed with error:%v", err)
+			}
+		}
+		retryDuration := time.Second * time.Duration(RetryDurationFactor) * time.Duration(opts.retries+1)
+		now := time.Now()
+		now.Add(retryDuration)
+		re := &requestEntity{
+			method:           method,
+			url:              queryURL,
+			body:             reqBody,
+			options:          *opts,
+			triggerTimestamp: now.Unix() + formatRetryDuration(opts.retries),
+		}
+		_pendingRequestsQueue.Push(re)
+		if nil == _pendingRequestsTimer {
+			go pendingRequestsTimer()
+		}
+	}
+}
+
+func formatRetryDuration(retries int) int64 {
+	if retries < 3 {
+		return RetryDurationFactor
+	}
+	return int64(RetryDurationFactor * retries)
+}
+
+func pendingRequestsTimer() {
+	if nil != _pendingRequestsTimer {
+		return
+	}
+	_pendingRequestsTimer = time.NewTicker(1 * time.Second)
+	for nil != _pendingRequestsTimer {
+		select {
+		case tim := <-_pendingRequestsTimer.C:
+			var ok = true
+			var item interface{}
+			now := tim.Unix()
+			for ok {
+				item, ok = _pendingRequestsQueue.Pop()
+				if ok {
+					ok = checkRetryEntity(item, now)
+				}
+			}
+			break
+		}
+	}
+}
+
+func checkRetryEntity(item interface{}, tim int64) bool {
+	re, ok := item.(*requestEntity)
+	if false == ok {
+		logger.Error.Printf("check retry http request entity while convert the element into request entity failed")
+		return true
+	}
+	if re.triggerTimestamp <= tim {
+		// do request
+		opts := newFuncHTTPClientOption(func(o *httpClientOption) {
+			o.headers = re.options.headers
+			o.proxies = re.options.proxies
+			o.retries = re.options.retries + 1
+			o.shouldRetry = re.options.shouldRetry
+			o.timeouts = re.options.timeouts
+			o.tlsOptions = re.options.tlsOptions
+		})
+		logger.Info.Printf("retrying http request %s with method:%s ...", re.url, re.method)
+		HTTPQuery(re.method, re.url, bytes.NewReader(re.body), opts)
+		return true
+	}
+	_pendingRequestsQueue.Push(re)
+	return false
+}
+
+type requestEntity struct {
+	method           string
+	url              string
+	body             []byte
+	options          httpClientOption
+	triggerTimestamp int64
+}
+
+var (
+	_pendingRequestsQueue              = queues.NewAscOrderingQueue()
+	_pendingRequestsTimer *time.Ticker = nil
+)
+
+func (r *requestEntity) GetID() string {
+	return r.url
+}
+func (r *requestEntity) GetName() string {
+	return r.url
+}
+func (r *requestEntity) OrderingValue() int64 {
+	return r.triggerTimestamp
+}
+func (r *requestEntity) DebugString() string {
+	return r.url
 }

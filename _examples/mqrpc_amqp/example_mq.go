@@ -55,6 +55,8 @@ func InitServiceHandler(app *iris.Application) error {
 		}
 	}
 
+	// httpclient.HTTPGet("http://127.0.0.1:8060/healthz", nil, httpclient.WithRetry(10))
+
 	go func() {
 		ticker1 := time.NewTimer(time.Second * 3)
 		ticker2 := time.NewTicker(time.Second * 13)

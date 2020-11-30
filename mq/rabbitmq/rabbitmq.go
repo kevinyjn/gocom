@@ -251,13 +251,12 @@ func (r *RabbitMQ) Run() {
 				r.close()
 				break
 			}
+			break
 		case err := <-r.connClosed:
 			logger.Error.Printf("RabbitMQ connection:%s closed with error:%v", r.Name, err)
 			r.queueName = ""
 			r.queue = nil
-			r.clearNotifyChan()
-			r.Conn = nil
-			r.Channel = nil
+			r.close()
 			break
 		case err := <-r.channelClosed:
 			logger.Error.Printf("RabbitMQ channel:%s closed with error:%v", r.Name, err)
@@ -267,9 +266,10 @@ func (r *RabbitMQ) Run() {
 			r.close()
 			break
 		case <-r.Close:
+			logger.Warning.Printf("RabbitMQ %s got an event that closing the connection", r.Name)
 			r.queueName = ""
 			r.queue = nil
-			r.Channel.Close()
+			r.close()
 			tick.Stop()
 			return
 		case <-tick.C:
@@ -281,6 +281,7 @@ func (r *RabbitMQ) Run() {
 				r.Conn = nil
 				r.queue = nil
 				r.queueName = ""
+				r.connecting = false
 				logger.Error.Printf("RabbitMQ connection:%s were closed on ticker checking", r.Name)
 				break
 			} else if nil == r.Channel {
@@ -288,6 +289,7 @@ func (r *RabbitMQ) Run() {
 			} else {
 				//
 			}
+			break
 		}
 	}
 }
@@ -295,13 +297,13 @@ func (r *RabbitMQ) Run() {
 func (r *RabbitMQ) clearNotifyChan() {
 	if r.channelClosed != nil {
 		for err := range r.channelClosed {
-			println(err)
+			logger.Warning.Printf("Clearing channel closed event:%v", err)
 		}
 		r.channelClosed = nil
 	}
 	if r.connClosed != nil {
 		for err := range r.connClosed {
-			println(err)
+			logger.Warning.Printf("Clearing connection closed event:%v", err)
 		}
 		r.connClosed = nil
 	}
@@ -309,7 +311,7 @@ func (r *RabbitMQ) clearNotifyChan() {
 
 func (r *RabbitMQ) close() {
 	r.connecting = false
-	r.clearNotifyChan()
+	// r.clearNotifyChan()
 	if r.Channel != nil {
 		r.Channel.Close()
 		r.Channel = nil
@@ -322,6 +324,8 @@ func (r *RabbitMQ) close() {
 		r.sshTunnel = nil
 	}
 	r.Conn = nil
+	r.connClosed = nil
+	r.channelClosed = nil
 }
 
 // try to start a new connection, channel and deliveries channel. if failed, try again in 5 sec.
