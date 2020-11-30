@@ -28,11 +28,16 @@ func TestUtilsHumanBytes(t *testing.T) {
 }
 
 func TestUtilsTimer(t *testing.T) {
-	timer, err := utils.NewTimer(10, 100, func(isnt *utils.Timer, tim time.Time, delegate interface{}) {
-		fmt.Println("timer triggered ...")
+	timer1, err1 := utils.NewTimer(10, 100, func(isnt *utils.Timer, tim time.Time, delegate interface{}) {
+		fmt.Println("timer1 triggered ...")
 	}, nil)
-	AssertNil(t, err, "utils.NewTimer")
-	AssertNotNil(t, timer, "timer")
+	timer2, err2 := utils.NewTimer(100, -1, func(isnt *utils.Timer, tim time.Time, delegate interface{}) {
+		fmt.Println("timer2 triggered ...")
+	}, nil)
+	AssertNil(t, err1, "utils.NewTimer")
+	AssertNotNil(t, timer1, "timer1")
+	AssertNil(t, err2, "utils.NewTimer")
+	AssertNotNil(t, timer2, "timer2")
 	to := time.NewTimer(time.Millisecond * 500)
 	select {
 	case <-to.C:

@@ -76,8 +76,10 @@ func (p *Timer) runDelay() {
 			if nil != p.timer {
 				p.timer.Stop()
 			}
-			p.timer = time.NewTicker(time.Millisecond * time.Duration(p.durationMillisec))
-			go p.runTimer()
+			if p.durationMillisec > 0 {
+				p.timer = time.NewTicker(time.Millisecond * time.Duration(p.durationMillisec))
+				go p.runTimer()
+			}
 			break
 		}
 	}
