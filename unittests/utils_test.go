@@ -1,7 +1,9 @@
 package unittests
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/kevinyjn/gocom/utils"
 )
@@ -23,4 +25,18 @@ func TestUtilsHumanBytes(t *testing.T) {
 	AssertEquals(t, "1.21 MB", utils.HumanByteSize(1024*1024+210*1024+1036), "MB size")
 	AssertEquals(t, "10.21 KB", utils.HumanByteSize(10*1024+220), "KB size")
 	AssertEquals(t, "10240 Bytes", utils.HumanByteSize(10240), "Byte size")
+}
+
+func TestUtilsTimer(t *testing.T) {
+	timer, err := utils.NewTimer(10, 100, func(isnt *utils.Timer, tim time.Time, delegate interface{}) {
+		fmt.Println("timer triggered ...")
+	}, nil)
+	AssertNil(t, err, "utils.NewTimer")
+	AssertNotNil(t, timer, "timer")
+	to := time.NewTimer(time.Millisecond * 500)
+	select {
+	case <-to.C:
+		fmt.Println("test timer finished")
+		break
+	}
 }
