@@ -18,12 +18,12 @@ import (
 
 // TunnelForwarder ssh tunnel
 type TunnelForwarder struct {
-	Host        string
-	Port        int
-	User        string
-	Password    string
-	RemoteHost  string
-	RemotePort  int
+	Host        string `property:"Host"`
+	Port        int    `property:"Port"`
+	User        string `property:"User"`
+	Password    string `property:"Password,category:password"`
+	RemoteHost  string `property:"Remote Host"`
+	RemotePort  int    `property:"Remote Port"`
 	localHost   string
 	localPort   int
 	sshConfig   *ssh.ClientConfig

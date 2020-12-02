@@ -41,7 +41,7 @@ type DBConnectionPoolOptions struct {
 	Host                string `property:"Database Host,descriptor:false"`
 	Port                int    `property:"Database Port,descriptor:false"`
 	User                string `property:"Database User"`
-	Password            string `property:"Password"`
+	Password            string `property:"Password,category:password"`
 	ServiceName         string `property:"Database Service Name,descriptor:false"`
 	ServiceID           string `property:"Database Service ID,descriptor:false"`
 	Database            string `property:"Database Name,descriptor:false"`
