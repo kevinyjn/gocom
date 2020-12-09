@@ -49,6 +49,6 @@ func TestUtilsTimer(t *testing.T) {
 func TestUtilsURLPathJoin(t *testing.T) {
 	url := utils.URLPathJoin("/demo", " ", "", "a/", "/b/", "/c/")
 	AssertEquals(t, "/demo/a/b/c/", url, "url")
-	url = utils.URLPathJoin("/demo", " ", "/", "a", "/b/", "c/")
+	url = utils.URLPathJoin("demo/", " ", "/", "a", "/b/", "c/")
 	AssertEquals(t, "/demo/a/b/c/", url, "url")
 }
