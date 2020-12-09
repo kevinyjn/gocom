@@ -387,6 +387,35 @@ func URLDecode(val string) string {
 	return s
 }
 
+// URLPathJoin slices
+func URLPathJoin(path string, paths ...string) string {
+	results := []string{path}
+	endsWithSep := false
+	if len(paths) > 0 {
+		for _, p := range paths {
+			p = strings.Trim(p, " ")
+			if "" == p || "/" == p {
+				continue
+			}
+			if '/' == p[0] {
+				if endsWithSep {
+					results = append(results, p[1:])
+				} else {
+					results = append(results, p)
+				}
+			} else {
+				if endsWithSep {
+					results = append(results, p)
+				} else {
+					results = append(results, "/"+p)
+				}
+			}
+			endsWithSep = '/' == p[len(p)-1]
+		}
+	}
+	return strings.Join(results, "")
+}
+
 // ConvertObjectToMapData converter
 func ConvertObjectToMapData(v interface{}, tag string) map[string]interface{} {
 	result := make(map[string]interface{})
