@@ -683,7 +683,7 @@ func formatPkConditionBeanImpl(pkColumns []*schemas.Column, value reflect.Value)
 				pkField = condiValue.Elem()
 				pkValue = value
 				for _, fieldName := range fieldNames {
-					pkField = pkValue.FieldByName(fieldName)
+					pkField = pkField.FieldByName(fieldName)
 					pkValue = pkValue.FieldByName(fieldName)
 
 					if false == pkField.IsValid() {

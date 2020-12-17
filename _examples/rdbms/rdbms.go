@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 
-	testDemo1()
+	// testDemo1()
 	testDemo2()
 
 	timer1 := time.NewTicker(5 * time.Second)
@@ -117,6 +117,7 @@ func testDemo1() {
 
 func testDemo2() {
 	ele := SchemaDemo2{}
+	ele.ID = 1001
 	ele.Name = "demo"
 	ele.Category = "debug"
 
