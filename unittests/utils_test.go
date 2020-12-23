@@ -52,3 +52,9 @@ func TestUtilsURLPathJoin(t *testing.T) {
 	url = utils.URLPathJoin("demo/", " ", "/", "a", "/b/", "c/")
 	AssertEquals(t, "/demo/a/b/c/", url, "url")
 }
+
+func TestUtilsConvertToString(t *testing.T) {
+	v0 := []byte("abc")
+	v1 := utils.ToString(v0)
+	AssertEquals(t, "abc", v1, "ToString")
+}

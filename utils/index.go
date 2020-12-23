@@ -73,6 +73,8 @@ func ToString(val interface{}) string {
 		return strconv.FormatBool(val.(bool))
 	case string:
 		return val.(string)
+	case []byte:
+		return string(val.([]byte))
 	}
 	value := reflect.ValueOf(val)
 	if value.Type().Kind() == reflect.Ptr {
