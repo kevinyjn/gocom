@@ -33,6 +33,7 @@ type Server struct {
 	DeployAddr string                 `yaml:"depoyAddr"`
 	Dev        bool                   `yaml:"dev"`
 	DevAddr    string                 `yaml:"devAddr"`
+	PprofPort  int                    `yaml:"pprofPort"`
 }
 
 // DefaultACL config block
