@@ -268,7 +268,7 @@ func (o *DBConnectionPoolOptions) GetConnectionData() (DBConnectionData, error) 
 		} else {
 			servicePart = "/" + o.ServiceName
 		}
-		connData.ConnString = fmt.Sprintf("\"%s\"/\"%s\"@%s:%d%s", strings.ReplaceAll(o.User, "\"", "\\\""), strings.ReplaceAll(o.Password, "\"", "\\\""), dbHost, dbPort, servicePart)
+		connData.ConnString = fmt.Sprintf("%s/\"%s\"@%s:%d%s", o.User, strings.ReplaceAll(o.Password, "\"", "\\\""), dbHost, dbPort, servicePart)
 		if "" != o.Database {
 			connData.ConnString = connData.ConnString + "/" + o.Database
 		}
