@@ -345,7 +345,8 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Error.Printf("query %s failed with error:%v", queryURL, err)
-		afterQueryFailed(-1, err, []byte(err.Error()), method, queryURL, body, &opts)
+		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
+		afterQueryFailed(-1, err, []byte(err.Error()), method, queryURL, bodyBuffer, &opts)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -353,7 +354,8 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error.Printf("Read result by queried url:%s failed with error:%v", queryURL, err)
-		afterQueryFailed(resp.StatusCode, err, []byte(err.Error()), method, queryURL, body, &opts)
+		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
+		afterQueryFailed(resp.StatusCode, err, []byte(err.Error()), method, queryURL, bodyBuffer, &opts)
 		return nil, err
 	}
 
@@ -366,7 +368,8 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 			}
 		}
 		err = errors.New(resp.Status)
-		afterQueryFailed(resp.StatusCode, err, respBody, method, queryURL, body, &opts)
+		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
+		afterQueryFailed(resp.StatusCode, err, respBody, method, queryURL, bodyBuffer, &opts)
 		return nil, err
 	}
 
@@ -377,19 +380,24 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	return respBody, nil
 }
 
-func afterQueryFailed(respStatusCode int, err error, respBody []byte, method string, queryURL string, body io.Reader, opts *httpClientOption) {
+func getQueryBodyBuffer(url string, body io.Reader) []byte {
+	var result []byte
+	if nil != body {
+		var err error
+		result, err = ioutil.ReadAll(body)
+		if nil != err {
+			logger.Error.Output(2, fmt.Sprintf("query %s failed and read request body failed with error:%v", url, err))
+		}
+	}
+	return result
+}
+
+func afterQueryFailed(respStatusCode int, err error, respBody []byte, method string, queryURL string, body []byte, opts *httpClientOption) {
 	logger.Error.Output(2, fmt.Sprintf("Error: query %s failed with error(code:%d):%v body:%s", queryURL, respStatusCode, err, string(respBody)))
 	if opts.shouldRetry > 0 {
 		if opts.retries >= opts.shouldRetry {
 			logger.Error.Printf("query %s failed with %d retries, skip retring", queryURL, opts.retries)
 			return
-		}
-		var reqBody []byte
-		if nil != body {
-			reqBody, err = ioutil.ReadAll(body)
-			if nil != err {
-				logger.Error.Printf("format http retry request while get request body content failed with error:%v", err)
-			}
 		}
 		retryDuration := time.Second * time.Duration(RetryDurationFactor) * time.Duration(opts.retries+1)
 		now := time.Now()
@@ -397,7 +405,7 @@ func afterQueryFailed(respStatusCode int, err error, respBody []byte, method str
 		re := &requestEntity{
 			method:           method,
 			url:              queryURL,
-			body:             reqBody,
+			body:             body,
 			options:          *opts,
 			triggerTimestamp: now.Unix() + formatRetryDuration(opts.retries),
 		}
