@@ -27,8 +27,18 @@ type Config struct {
 	AutoDelete  bool              `yaml:"autoDelete" json:"autoDelete"`
 	RPCEnabled  bool              `yaml:"rpcEnabled"`
 	// Kafka parameters
-	Topic   string `yaml:"topic" json:"topic"`
-	GroupID string `yaml:"groupId" json:"groupId"`
+	Topic        string `yaml:"topic" json:"topic"`
+	GroupID      string `yaml:"groupId" json:"groupId"`
+	PrivateTopic string `yaml:"privateTopic" json:"privateTopic"`
+	Partition    int    `yaml:"partition" json:"partition"`
+	// kerberos 认证需要配置
+	KerberosServiceName string `yaml:"kerberosServiceName" json:"kerberosServiceName"`
+	KerberosKeytab      string `yaml:"kerberosKeytab" json:"kerberosKeytab"`
+	KerberosPrincipal   string `yaml:"kerberosPrincipal" json:"kerberosPrincipal"`
+	// plain 认证需要配置
+	SaslMechanisms string `yaml:"saslMechanisms" json:"saslMechanisms"`
+	SaslUsername   string `yaml:"saslUsername" json:"saslUsername"`
+	SaslPassword   string `yaml:"saslPassword" json:"saslPassword"`
 }
 
 // RoutesEnv struct

@@ -7,14 +7,16 @@ import (
 
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq/kafka"
+	"github.com/kevinyjn/gocom/mq/kafka2"
 	"github.com/kevinyjn/gocom/mq/mqenv"
 	"github.com/kevinyjn/gocom/mq/rabbitmq"
 )
 
 // Constants
 const (
-	DriverTypeAMQP  = mqenv.DriverTypeAMQP
-	DriverTypeKafka = mqenv.DriverTypeKafka
+	DriverTypeAMQP   = mqenv.DriverTypeAMQP
+	DriverTypeKafka  = mqenv.DriverTypeKafka
+	DriverTypeKafka2 = mqenv.DriverTypeKafka2
 
 	MQTypeConsumer  = mqenv.MQTypeConsumer
 	MQTypePublisher = mqenv.MQTypePublisher
@@ -119,6 +121,20 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			GroupID: topicConfig.GroupID,
 		}
 		_, initErr = kafka.InitKafka(topicCategory, &instCnf, kafkaCfg)
+	} else if mqenv.DriverTypeKafka2 == instCnf.Driver {
+		kafakv2Cfg := kafka2.Config{
+			Hosts:               instCnf.Host,
+			Partition:           topicConfig.Partition,
+			PrivateTopic:        topicConfig.PrivateTopic,
+			GroupID:             topicConfig.GroupID,
+			KerberosServiceName: topicConfig.KerberosServiceName,
+			KerberosKeytab:      topicConfig.KerberosKeytab,
+			KerberosPrincipal:   topicConfig.KerberosPrincipal,
+			SaslMechanisms:      topicConfig.SaslMechanisms,
+			SaslUsername:        topicConfig.SaslUsername,
+			SaslPassword:        topicConfig.SaslPassword,
+		}
+		_, initErr = kafka2.InitKafka(topicCategory, kafakv2Cfg)
 	}
 
 	if initErr != nil {
@@ -219,6 +235,11 @@ func GetKafka(name string) (*kafka.Kafka, error) {
 	return kafka.GetKafka(name)
 }
 
+// GetKafka2 get kafka2.
+func GetKafka2(name string) (*kafka2.KafkaWorker, error) {
+	return kafka2.GetKafka(name)
+}
+
 // ConsumeMQ consume
 func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 	var err error
@@ -252,6 +273,13 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 		}
 		pxy := kafka.GenerateKafkaConsumerProxy(consumeProxy)
 		inst.Consume <- pxy
+	} else if mqenv.DriverTypeKafka2 == mqDriver {
+		inst, err := kafka2.GetKafka(mqCategory)
+		if nil != err {
+			return err
+		}
+		inst.Subscribe(mqConfig.Topic, consumeProxy)
+
 	} else {
 		logger.Error.Printf("Consume MQ with category:%s failed, unknwon driver:%s", mqCategory, mqDriver)
 		return fmt.Errorf("Invalid mq %s driver", mqCategory)
@@ -290,6 +318,13 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 		}
 		msg := kafka.GenerateKafkaPublishMessage(publishMsg, inst.Config.Topic)
 		inst.Publish <- msg
+	} else if mqenv.DriverTypeKafka2 == mqDriver {
+		inst, err := kafka2.GetKafka(mqCategory)
+		if nil != err {
+			return err
+		}
+		inst.Send(mqConfig.Topic, publishMsg, false)
+
 	} else {
 		logger.Error.Printf("Publish MQ with category:%s failed, unknwon driver:%s", mqCategory, mqDriver)
 		return fmt.Errorf("Invalid mq %s driver", mqCategory)
@@ -312,6 +347,12 @@ func QueryMQRPC(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsume
 			return nil, err
 		}
 		return inst.QueryRPC(pm)
+	} else if mqenv.DriverTypeKafka2 == mqDriver {
+		inst, err := kafka2.GetKafka(mqCategory)
+		if nil != err {
+			return nil, err
+		}
+		return inst.Send(mqConfig.Topic, pm, true)
 	}
 	return nil, fmt.Errorf("Query RPC MQ not supported driver:%s", mqDriver)
 }
