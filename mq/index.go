@@ -119,6 +119,7 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			Partition:           topicConfig.Partition,
 			PrivateTopic:        topicConfig.PrivateTopic,
 			GroupID:             topicConfig.GroupID,
+			MaxPollIntervalMS:   topicConfig.MaxPollIntervalMS,
 			KerberosServiceName: topicConfig.KerberosServiceName,
 			KerberosKeytab:      topicConfig.KerberosKeytab,
 			KerberosPrincipal:   topicConfig.KerberosPrincipal,

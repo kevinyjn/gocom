@@ -27,10 +27,11 @@ type Config struct {
 	AutoDelete  bool              `yaml:"autoDelete" json:"autoDelete"`
 	RPCEnabled  bool              `yaml:"rpcEnabled"`
 	// Kafka parameters
-	Topic        string `yaml:"topic" json:"topic"`
-	GroupID      string `yaml:"groupId" json:"groupId"`
-	PrivateTopic string `yaml:"privateTopic" json:"privateTopic"`
-	Partition    int    `yaml:"partition" json:"partition"`
+	Topic             string `yaml:"topic" json:"topic"`
+	GroupID           string `yaml:"groupId" json:"groupId"`
+	PrivateTopic      string `yaml:"privateTopic" json:"privateTopic"`
+	Partition         int    `yaml:"partition" json:"partition"`
+	MaxPollIntervalMS int    `yaml:"maxPollIntervalMs" json:"maxPollIntervalMs"`
 	// kerberos 认证需要配置
 	KerberosServiceName string `yaml:"kerberosServiceName" json:"kerberosServiceName"`
 	KerberosKeytab      string `yaml:"kerberosKeytab" json:"kerberosKeytab"`

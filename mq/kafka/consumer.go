@@ -23,6 +23,11 @@ func (c *Consumer) ConfigGroupID(groupID string) {
 	c.Config["group.id"] = groupID
 }
 
+// ConfigMaxPollIntervalMS 配置两次拉取数据之间的最大间隔.
+func (c *Consumer) ConfigMaxPollIntervalMS(interval int) {
+	c.Config["max.poll.interval.ms"] = interval
+}
+
 // StopConsumer 停止消费.
 func (c *Consumer) StopConsumer() {
 	c.IsInitialized = false
@@ -99,5 +104,6 @@ func NewConsumer(hosts string, groupID string) *Consumer {
 	//c.ConfigPartition(0)
 	c.ConfigHeartbeatInterval(2000)
 	c.ConfigSessionTimeout(6000)
+	c.ConfigMaxPollIntervalMS(60 * 1000)
 	return c
 }

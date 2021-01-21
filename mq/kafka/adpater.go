@@ -12,10 +12,11 @@ var kafkaInstances = map[string]*KafkaWorker{}
 
 // Config kafkav2 配置参数.
 type Config struct {
-	Hosts        string
-	Partition    int
-	PrivateTopic string
-	GroupID      string
+	Hosts             string
+	Partition         int
+	PrivateTopic      string
+	GroupID           string
+	MaxPollIntervalMS int
 	// kerberos 认证需要配置
 	KerberosServiceName string
 	KerberosKeytab      string
@@ -72,6 +73,9 @@ func InitKafka(mqConnName string, config Config) (*KafkaWorker, error) {
 			instance.Consumer.ConfigSaslUserName(config.SaslUsername)
 			instance.Consumer.ConfigSaslPassword(config.SaslPassword)
 			instance.Consumer.ConfigSecurityProtocol("sasl_plaintext")
+		}
+		if config.MaxPollIntervalMS > 0 {
+			instance.Consumer.ConfigMaxPollIntervalMS(config.MaxPollIntervalMS)
 		}
 		kafkaInstances[mqConnName] = instance
 		return instance, nil
