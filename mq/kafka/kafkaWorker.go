@@ -1,4 +1,4 @@
-package kafka2
+package kafka
 
 import (
 	"strings"
@@ -6,7 +6,6 @@ import (
 
 	proto "github.com/golang/protobuf/proto"
 	"github.com/kevinyjn/gocom/logger"
-	"github.com/kevinyjn/gocom/mq/kafka"
 	"github.com/kevinyjn/gocom/mq/mqenv"
 )
 
@@ -26,7 +25,7 @@ type KafkaWorker struct {
 	ContentEncoding     string                            // 编码格式
 	GroupID             string                            //组id，会包含在 kafkapacket 数据包中
 	MsgType             string                            // 消息类型
-	Stats               kafka.Stats                       // 统计信息
+	Stats               Stats                             // 统计信息
 }
 
 // newChannel 返回一个新的 字节数组通道.
@@ -258,8 +257,8 @@ func NewKafkaWorker(hosts string, partition int, privateTopic, groupID string) *
 	worker.availableChannels = []chan *KafkaPacket{}
 	worker.consumerRegisters = make(map[string]*mqenv.MQConsumerProxy)
 	worker.openTopicChannel = make(map[string]string)
-	worker.Stats.Consumer = kafka.InstStats{}
-	worker.Stats.Producer = kafka.InstStats{}
+	worker.Stats.Consumer = InstStats{}
+	worker.Stats.Producer = InstStats{}
 
 	return worker
 }

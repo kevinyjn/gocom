@@ -1,4 +1,4 @@
-package kafka2
+package kafka
 
 import (
 	"time"
@@ -14,7 +14,8 @@ type CallBack func([]byte)
 type Consumer struct {
 	Base
 	Consumer      *kafka.Consumer
-	IsInitialized bool //是否已经初始化
+	IsInitialized bool                    //是否已经初始化
+	OffsetDict    map[string]kafka.Offset // 记录topic 的偏移量，避免 rebalance后重逢处理信息
 }
 
 // ConfigGroupID 配置group id.
@@ -57,8 +58,15 @@ func (c *Consumer) Receive(topic string, callback CallBack) error {
 								logger.Error.Println(err)
 							}
 						}()
+						offset, ok := c.OffsetDict[topic]
+						if !ok {
+							offset = -1
+						}
+						if msg.TopicPartition.Offset > offset {
+							callback(msg.Value)
+							c.OffsetDict[topic] = offset
+						}
 
-						callback(msg.Value)
 					}()
 
 				} else {
@@ -85,6 +93,7 @@ func (c *Consumer) Receive(topic string, callback CallBack) error {
 func NewConsumer(hosts string, groupID string) *Consumer {
 	c := &Consumer{}
 	c.Config = kafka.ConfigMap{}
+	c.OffsetDict = make(map[string]kafka.Offset)
 	c.ConfigServers(hosts)
 	c.ConfigGroupID(groupID)
 	//c.ConfigPartition(0)

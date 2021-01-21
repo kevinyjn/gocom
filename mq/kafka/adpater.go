@@ -1,4 +1,4 @@
-package kafka2
+package kafka
 
 import (
 	"fmt"
@@ -24,6 +24,26 @@ type Config struct {
 	SaslMechanisms string
 	SaslUsername   string
 	SaslPassword   string
+}
+
+// InstStats .
+type InstStats struct {
+	Bytes         int64  `json:"bytes"`
+	Dials         int64  `json:"connections"`
+	Topic         string `json:"topic"`
+	Messages      int64  `json:"messages"`
+	Rebalances    int64  `json:"rebalances"`
+	Errors        int64  `json:"errors"`
+	Timeouts      int64  `json:"timeouts"`
+	ClientID      string `json:"clientID"`
+	QueueLength   int64  `json:"queueLength"`
+	QueueCapacity int64  `json:"queueCapacity"`
+}
+
+// Stats struct
+type Stats struct {
+	Consumer InstStats `json:"consumer"`
+	Producer InstStats `json:"producer"`
 }
 
 // InitKafka 初始化kafka.
@@ -72,7 +92,7 @@ func GetKafka(mqConnName string) (*KafkaWorker, error) {
 // ConvertKafkaPacketToMQConsumerMessage 把接收到的kafkaPacket 数据转换成MQConsumerMessage.
 func ConvertKafkaPacketToMQConsumerMessage(packet *KafkaPacket) mqenv.MQConsumerMessage {
 	consumerMessage := mqenv.MQConsumerMessage{
-		Driver:        mqenv.DriverTypeKafka2,
+		Driver:        mqenv.DriverTypeKafka,
 		Queue:         packet.SendTo,
 		CorrelationID: packet.CorrelationId,
 		ConsumerTag:   "",

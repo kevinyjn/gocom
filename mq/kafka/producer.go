@@ -1,4 +1,4 @@
-package kafka2
+package kafka
 
 import (
 	"time"
