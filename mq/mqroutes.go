@@ -32,6 +32,10 @@ type Config struct {
 	PrivateTopic      string `yaml:"privateTopic" json:"privateTopic"`
 	Partition         int    `yaml:"partition" json:"partition"`
 	MaxPollIntervalMS int    `yaml:"maxPollIntervalMs" json:"maxPollIntervalMs"`
+	// 消息类型:
+	//direct:组播,订阅同一个topic，消费者组会相同，一条消息只会被组内一个消费者接收
+	//fanout:广播,订阅同一个topic，但是消费者组会使用uuid，所有组都会收到信息
+	MessageType string `yaml:"messageType" json:"messageType"`
 	// kerberos 认证需要配置
 	KerberosServiceName string `yaml:"kerberosServiceName" json:"kerberosServiceName"`
 	KerberosKeytab      string `yaml:"kerberosKeytab" json:"kerberosKeytab"`

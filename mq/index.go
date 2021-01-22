@@ -126,6 +126,7 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			SaslMechanisms:      topicConfig.SaslMechanisms,
 			SaslUsername:        topicConfig.SaslUsername,
 			SaslPassword:        topicConfig.SaslPassword,
+			MessageType:         topicConfig.MessageType,
 		}
 		_, initErr = kafka.InitKafka(topicCategory, kafakCfg)
 	}

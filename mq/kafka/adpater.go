@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kevinyjn/gocom/mq/mqenv"
+	"github.com/kevinyjn/gocom/utils"
 )
 
 // kafkaInstances kafka 实例.
@@ -17,6 +18,10 @@ type Config struct {
 	PrivateTopic      string
 	GroupID           string
 	MaxPollIntervalMS int
+	// 消息类型:
+	//direct:组播,订阅同一个topic，消费者组会相同，一条消息只会被组内一个消费者接收
+	//fanout:广播,订阅同一个topic，但是消费者组会使用uuid，所有组都会收到信息
+	MessageType string `yaml:"messageType" json:"messageType"`
 	// kerberos 认证需要配置
 	KerberosServiceName string
 	KerberosKeytab      string
@@ -51,6 +56,9 @@ type Stats struct {
 func InitKafka(mqConnName string, config Config) (*KafkaWorker, error) {
 	instance, ok := kafkaInstances[mqConnName]
 	if !ok {
+		if config.MessageType == "fanout" {
+			config.GroupID = utils.GenUUID()
+		}
 		instance = NewKafkaWorker(config.Hosts, config.Partition, config.PrivateTopic, config.GroupID)
 		if config.KerberosServiceName != "" && config.KerberosKeytab != "" && config.KerberosPrincipal != "" {
 			instance.Producer.ConfigKerberosServiceName(config.KerberosServiceName)

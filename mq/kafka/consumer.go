@@ -57,7 +57,7 @@ func (c *Consumer) Receive(topic string, callback CallBack) error {
 				msg, err := c.Consumer.ReadMessage(-1)
 				if err == nil {
 					// 执行回调函数的时候进行异常捕捉，避免退出循环
-					func() {
+					go func() {
 						defer func() {
 							if err := recover(); err != nil {
 								logger.Error.Println(err)

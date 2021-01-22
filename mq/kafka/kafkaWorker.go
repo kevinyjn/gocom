@@ -7,6 +7,7 @@ import (
 	proto "github.com/golang/protobuf/proto"
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq/mqenv"
+	"github.com/kevinyjn/gocom/utils"
 )
 
 // Worker 订阅topic 后处理收到信息的回调函数.
@@ -113,7 +114,7 @@ func (worker *KafkaWorker) Send(topic string, publishMsg *mqenv.MQPublishMessage
 		GroupId:         worker.GroupID,
 		CorrelationId:   publishMsg.CorrelationID,
 		ReplyTo:         worker.PrivateTopic,
-		Timestamp:       uint64(time.Now().UTC().Unix()),
+		Timestamp:       uint64(utils.CurrentMillisecond()),
 		Type:            worker.MsgType,
 		UserId:          publishMsg.UserID,
 		AppId:           publishMsg.AppID,
