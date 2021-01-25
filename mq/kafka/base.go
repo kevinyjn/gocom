@@ -1,13 +1,13 @@
 package kafka
 
 import (
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	confluentKafka "gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
 // Base .
 type Base struct {
-	Partition int             // partition 分区
-	Config    kafka.ConfigMap // kafka 的配置字典
+	Partition int                      // partition 分区
+	Config    confluentKafka.ConfigMap // kafka 的配置字典
 }
 
 // ConfigServers 配置连接的服务器,如"localhost:9092,localhost:9093".

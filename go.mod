@@ -18,13 +18,13 @@ require (
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/flosch/pongo2 v0.0.0-20200913210552-0d938eb266f3 // indirect
 	github.com/fluent/fluent-logger-golang v1.5.0
-	github.com/frankban/quicktest v1.11.3 // indirect
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424 // indirect
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/godror/godror v0.22.2
 	github.com/golang/protobuf v1.4.3
 	github.com/golang/snappy v0.0.2 // indirect
+	github.com/google/go-cmp v0.5.4 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/gorilla/schema v1.2.0 // indirect
@@ -49,10 +49,8 @@ require (
 	github.com/nxadm/tail v1.4.5 // indirect
 	github.com/onsi/ginkgo v1.14.2 // indirect
 	github.com/onsi/gomega v1.10.4 // indirect
-	github.com/pierrec/lz4 v2.6.0+incompatible // indirect
 	github.com/robfig/cron v1.2.0
 	github.com/ryanuber/columnize v2.1.2+incompatible // indirect
-	github.com/segmentio/kafka-go v0.4.8
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/smartystreets/assertions v1.2.0 // indirect
@@ -61,6 +59,7 @@ require (
 	github.com/tidwall/pretty v1.0.2 // indirect
 	github.com/tinylib/msgp v1.1.5 // indirect
 	github.com/valyala/fasthttp v1.18.0 // indirect
+	github.com/xdg/stringprep v1.0.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0 // indirect

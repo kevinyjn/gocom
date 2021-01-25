@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/kevinyjn/gocom/logger"
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	confluentKafka "gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
 // CallBack .回调函数
@@ -13,9 +13,9 @@ type CallBack func([]byte)
 // Consumer 消费者.
 type Consumer struct {
 	Base
-	Consumer      *kafka.Consumer
-	IsInitialized bool                    //是否已经初始化
-	OffsetDict    map[string]kafka.Offset // 记录topic 的偏移量，避免 rebalance后重逢处理信息
+	Consumer      *confluentKafka.Consumer
+	IsInitialized bool                             //是否已经初始化
+	OffsetDict    map[string]confluentKafka.Offset // 记录topic 的偏移量，避免 rebalance后重逢处理信息
 }
 
 // ConfigGroupID 配置group id.
@@ -40,7 +40,7 @@ func (c *Consumer) StopConsumer() {
 func (c *Consumer) Receive(topic string, callback CallBack) error {
 
 	if !c.IsInitialized {
-		consumer, err := kafka.NewConsumer(&c.Config)
+		consumer, err := confluentKafka.NewConsumer(&c.Config)
 		if err != nil {
 			logger.Error.Panicln(err)
 			return err
@@ -97,8 +97,8 @@ func (c *Consumer) Receive(topic string, callback CallBack) error {
 // NewConsumer 返回消费者.
 func NewConsumer(hosts string, groupID string) *Consumer {
 	c := &Consumer{}
-	c.Config = kafka.ConfigMap{}
-	c.OffsetDict = make(map[string]kafka.Offset)
+	c.Config = confluentKafka.ConfigMap{}
+	c.OffsetDict = make(map[string]confluentKafka.Offset)
 	c.ConfigServers(hosts)
 	c.ConfigGroupID(groupID)
 	//c.ConfigPartition(0)
