@@ -260,7 +260,7 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 		if nil != err {
 			return err
 		}
-		inst.Subscribe(mqConfig.Topic, consumeProxy)
+		inst.Subscribe(consumeProxy.Queue, consumeProxy)
 
 	} else {
 		logger.Error.Printf("Consume MQ with category:%s failed, unknwon driver:%s", mqCategory, mqDriver)
@@ -298,7 +298,7 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 		if nil != err {
 			return err
 		}
-		inst.Send(mqConfig.Topic, publishMsg, false)
+		inst.Send(publishMsg.RoutingKey, publishMsg, false)
 
 	} else {
 		logger.Error.Printf("Publish MQ with category:%s failed, unknwon driver:%s", mqCategory, mqDriver)
@@ -327,7 +327,7 @@ func QueryMQRPC(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsume
 		if nil != err {
 			return nil, err
 		}
-		return inst.Send(mqConfig.Topic, pm, true)
+		return inst.Send(pm.RoutingKey, pm, true)
 	}
 	return nil, fmt.Errorf("Query RPC MQ not supported driver:%s", mqDriver)
 }
