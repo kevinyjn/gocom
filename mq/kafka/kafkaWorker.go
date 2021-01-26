@@ -84,6 +84,9 @@ func (worker *KafkaWorker) sendOpenChannel(topic string) error {
 
 // registerPrivateTopic 注册私有的topic，接收发送出去的信息的回复.
 func (worker *KafkaWorker) registerPrivateTopic() {
+	if worker.PrivateTopic == "" {
+		return
+	}
 	_, ok := worker.consumerRegisters[worker.PrivateTopic]
 	if !ok {
 		worker.sendOpenChannel(worker.PrivateTopic)
@@ -107,13 +110,17 @@ func (worker *KafkaWorker) Send(topic string, publishMsg *mqenv.MQPublishMessage
 		}
 		headers = append(headers, h)
 	}
+	replyTo := worker.PrivateTopic
+	if worker.PrivateTopic == "" {
+		replyTo = publishMsg.ReplyTo
+	}
 	p := &KafkaPacket{
 		ContentType:     publishMsg.ContentType,
 		ContentEncoding: worker.ContentEncoding,
 		SendTo:          topic,
 		GroupId:         worker.GroupID,
 		CorrelationId:   publishMsg.CorrelationID,
-		ReplyTo:         worker.PrivateTopic,
+		ReplyTo:         replyTo,
 		Timestamp:       uint64(utils.CurrentMillisecond()),
 		Type:            worker.MsgType,
 		UserId:          publishMsg.UserID,

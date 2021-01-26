@@ -58,6 +58,7 @@ func InitKafka(mqConnName string, config Config) (*KafkaWorker, error) {
 	if !ok {
 		if config.MessageType == "fanout" {
 			config.GroupID = utils.GenUUID()
+			config.PrivateTopic = ""
 		}
 		instance = NewKafkaWorker(config.Hosts, config.Partition, config.PrivateTopic, config.GroupID)
 		if config.KerberosServiceName != "" && config.KerberosKeytab != "" && config.KerberosPrincipal != "" {
