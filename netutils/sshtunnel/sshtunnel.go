@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/utils"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -54,7 +55,14 @@ func NewSSHTunnel(dsn string, remoteHost string, remotePort int) (*TunnelForward
 
 // PrivateKeyPath getter
 func (c *TunnelForwarder) PrivateKeyPath() string {
-	return os.Getenv("HOME") + "/.ssh/id_rsa"
+	homeDir, err := os.UserHomeDir()
+	if nil != err {
+		logger.Error.Printf("SSHTunnel get user home directory failed with error:%v", err)
+		homeDir = os.Getenv("HOME")
+	}
+	sshDir := homeDir + "/.ssh"
+	utils.EnsureDirectory(sshDir)
+	return sshDir + "/id_rsa"
 }
 
 // ParsePrivateKey parse private key
@@ -70,17 +78,25 @@ func (c *TunnelForwarder) ParsePrivateKey(keyPath string) (ssh.Signer, error) {
 func (c *TunnelForwarder) InitUserAuth(user, password string) (*ssh.ClientConfig, error) {
 	key, err := c.ParsePrivateKey(c.PrivateKeyPath())
 	if nil != err {
-		return nil, err
-	}
-	c.sshConfig = &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(key),
-			ssh.Password(password),
-		},
-		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			return nil
-		},
+		// return nil, err
+		c.sshConfig = &ssh.ClientConfig{
+			User: user,
+			Auth: []ssh.AuthMethod{
+				ssh.Password(password),
+			},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		}
+	} else {
+		c.sshConfig = &ssh.ClientConfig{
+			User: user,
+			Auth: []ssh.AuthMethod{
+				ssh.PublicKeys(key),
+				ssh.Password(password),
+			},
+			HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+				return nil
+			},
+		}
 	}
 
 	return c.sshConfig, nil
