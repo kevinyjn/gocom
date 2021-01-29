@@ -302,17 +302,17 @@ func HumanToTimestamp(format string, v string) int64 {
 	var t time.Time
 	switch format {
 	case "YYYYMMDD", "yyyyMMdd":
-		t, _ = time.Parse("20060102", v)
+		t, _ = time.ParseInLocation("20060102", v, time.Local)
 	case "YYYYMMDDHHmmss", "yyyyMMddHHmmss":
-		t, _ = time.Parse("20060102150405", v)
+		t, _ = time.ParseInLocation("20060102150405", v, time.Local)
 	case "YYYY-MM-DD", "yyyy-MM-dd":
-		t, _ = time.Parse("2006-01-02", v)
+		t, _ = time.ParseInLocation("2006-01-02", v, time.Local)
 	case "YYYY-MM-DD HH:mm:ss", "yyyy-MM-dd HH:mm:ss":
-		t, _ = time.Parse("2006-01-02 15:04:05", v)
+		t, _ = time.ParseInLocation("2006-01-02 15:04:05", v, time.Local)
 	case "YYYY/MM/DD HH:mm:ss", "yyyy/MM/dd HH:mm:ss":
-		t, _ = time.Parse("2006/01/02 15:04:05", v)
+		t, _ = time.ParseInLocation("2006/01/02 15:04:05", v, time.Local)
 	default:
-		t, _ = time.Parse("2006-01-02 15:04:05", v)
+		t, _ = time.ParseInLocation("2006-01-02 15:04:05", v, time.Local)
 	}
 	return t.Unix()
 }
