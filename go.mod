@@ -12,7 +12,6 @@ require (
 	github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible // indirect
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
-	github.com/confluentinc/confluent-kafka-go v1.5.2 // indirect
 	github.com/denisenkom/go-mssqldb v0.9.0
 	github.com/eknkc/amber v0.0.0-20171010120322-cdade1c07385 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
@@ -51,6 +50,7 @@ require (
 	github.com/onsi/gomega v1.10.4 // indirect
 	github.com/robfig/cron v1.2.0
 	github.com/ryanuber/columnize v2.1.2+incompatible // indirect
+	github.com/segmentio/kafka-go v0.4.9
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/smartystreets/assertions v1.2.0 // indirect
@@ -59,7 +59,6 @@ require (
 	github.com/tidwall/pretty v1.0.2 // indirect
 	github.com/tinylib/msgp v1.1.5 // indirect
 	github.com/valyala/fasthttp v1.18.0 // indirect
-	github.com/xdg/stringprep v1.0.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0 // indirect
@@ -75,7 +74,6 @@ require (
 	golang.org/x/text v0.3.4
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
-	gopkg.in/confluentinc/confluent-kafka-go.v1 v1.5.2
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 	moul.io/http2curl v1.0.0 // indirect

@@ -75,9 +75,10 @@ func (worker *KafkaWorker) sendOpenChannel(topic string) error {
 		err := worker.Producer.Send(topic, registerValue)
 		if nil != err {
 			logger.Error.Println(err)
-			return err
+			// 因为开启kafka 自动创建topic后，第一次向private_topic 发送信息会报错
+			// return err
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 	return nil
 }
@@ -184,7 +185,7 @@ func (worker *KafkaWorker) reply(topic string, message *mqenv.MQPublishMessage, 
 		logger.Error.Println(err)
 	}
 	worker.sendWorker(topic, sendBytes)
-	logger.Debug.Println("reply " + string(message.Body))
+	// logger.Debug.Println("reply " + string(message.Body))
 
 }
 
@@ -193,7 +194,7 @@ func (worker *KafkaWorker) onMessage(packet *KafkaPacket) {
 	// 收到信息有两种情况
 	// 1 发出信息后收到回复,在waitResponseMessage 有通道，把信息发送过去就可以了
 	// 2 订阅topic 后收到的回复
-	logger.Debug.Println("onMessage body=" + string(packet.Body))
+	// logger.Debug.Println("onMessage body=" + string(packet.Body))
 	ch, ok := worker.waitResponseMessage[packet.CorrelationId]
 	if ok {
 		delete(worker.waitResponseMessage, packet.CorrelationId)
@@ -210,12 +211,12 @@ func (worker *KafkaWorker) onMessage(packet *KafkaPacket) {
 				consumerMessage := ConvertKafkaPacketToMQConsumerMessage(packet)
 				if consumerProxy.Callback != nil {
 					result := consumerProxy.Callback(consumerMessage)
-					if result != nil {
-						logger.Debug.Println("onMessage result=" + string(result.Body))
-						logger.Debug.Println("onMessage packet.ReplyTo=" + packet.ReplyTo)
-					}
+					// if result != nil {
+					// 	logger.Debug.Println("onMessage result=" + string(result.Body))
+					// 	logger.Debug.Println("onMessage packet.ReplyTo=" + packet.ReplyTo)
+					// }
 					if result != nil && packet.ReplyTo != "" {
-						logger.Debug.Println("onMessage begin to reply")
+						// logger.Debug.Println("onMessage begin to reply")
 						worker.reply(packet.ReplyTo, result, packet.CorrelationId)
 					}
 				}

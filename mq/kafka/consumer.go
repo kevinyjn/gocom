@@ -1,10 +1,14 @@
 package kafka
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/kevinyjn/gocom/logger"
-	confluentKafka "gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	k "github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl/plain"
 )
 
 // CallBack .回调函数
@@ -13,9 +17,11 @@ type CallBack func([]byte)
 // Consumer 消费者.
 type Consumer struct {
 	Base
-	Consumer      *confluentKafka.Consumer
-	IsInitialized bool                             //是否已经初始化
-	OffsetDict    map[string]confluentKafka.Offset // 记录topic 的偏移量，避免 rebalance后重逢处理信息
+	Readers map[string]*k.Reader // 每一个topic 一个reader
+	// Params     map[string]string    // 配置参数
+	running    map[string]bool  // 用于设置reader 是否要关闭连接
+	Brokers    []string         // kafka 的节点
+	OffsetDict map[string]int64 // 记录偏移量，避免在连接断开重连时候重复处理信息
 }
 
 // ConfigGroupID 配置group id.
@@ -30,7 +36,9 @@ func (c *Consumer) ConfigMaxPollIntervalMS(interval int) {
 
 // StopConsumer 停止消费.
 func (c *Consumer) StopConsumer() {
-	c.IsInitialized = false
+	for k := range c.running {
+		c.running[k] = false
+	}
 }
 
 // Receive 订阅topic，处理消息.
@@ -38,72 +46,87 @@ func (c *Consumer) StopConsumer() {
 // @param topic 订阅的topic
 // @param callback ,处理接收到的信息，入参是 接收到的[]byte
 func (c *Consumer) Receive(topic string, callback CallBack) error {
-
-	if !c.IsInitialized {
-		consumer, err := confluentKafka.NewConsumer(&c.Config)
-		if err != nil {
-			logger.Error.Panicln(err)
-			return err
-		}
-		c.Consumer = consumer
-		c.IsInitialized = true
-		logger.Debug.Println("Receive init " + topic + " success")
+	if _, ok := c.Readers[topic]; ok {
+		return errors.New("The topic is already subscribed")
 	}
-	c.Consumer.Subscribe(topic, nil)
+	logger.Debug.Printf("group_id:%s\n", c.Config["group.id"])
+	config := k.ReaderConfig{
+		Brokers:        c.Brokers,
+		GroupID:        c.Config["group.id"].(string),
+		Topic:          topic,
+		MinBytes:       1,    // 1 Byte
+		MaxBytes:       10e6, // 10MB
+		StartOffset:    k.LastOffset,
+		CommitInterval: 1 * time.Second,
+		ErrorLogger:    logger.Error,
+		ReadBackoffMax: 200 * time.Millisecond,
+	}
+	if v, ok := c.Config["heartbeat.interval.ms"]; ok {
+		config.HeartbeatInterval = time.Duration(v.(int)) * time.Millisecond
+	}
+	if v, ok := c.Config["session.timeout.ms"]; ok {
+		config.SessionTimeout = time.Duration(v.(int)) * time.Millisecond
+	}
+	// if v, ok := c.Config["reconnect.backoff.ms"];ok{
+	// 	config.ReadBackoffMax
+	// }
+	if c.Config["sasl.username"] != nil && c.Config["sasl.password"] != nil {
+		mechanism := plain.Mechanism{
+			Username: c.Config["sasl.username"].(string),
+			Password: c.Config["sasl.password"].(string),
+		}
+		dialer := &k.Dialer{
+			Timeout:       10 * time.Second,
+			DualStack:     true,
+			SASLMechanism: mechanism,
+		}
+		config.Dialer = dialer
+
+	}
+
+	reader := k.NewReader(config)
+
+	c.Readers[topic] = reader
+	c.running[topic] = true
+	c.OffsetDict[topic] = -1
 	go func() {
-		for {
-			if c.IsInitialized {
-				logger.Debug.Println("Receive begin to receive data")
-				msg, err := c.Consumer.ReadMessage(-1)
-				if err == nil {
-					// 执行回调函数的时候进行异常捕捉，避免退出循环
-					go func() {
-						defer func() {
-							if err := recover(); err != nil {
-								logger.Error.Println(err)
-							}
-						}()
-						offset, ok := c.OffsetDict[topic]
-						if !ok {
-							offset = -1
-						}
-						if msg.TopicPartition.Offset > offset {
-							callback(msg.Value)
-							c.OffsetDict[topic] = offset
-						}
-
-					}()
-
-				} else {
-					logger.Error.Printf("Consumer error: %v (%v)\n", err, msg)
-				}
-			} else {
-				// 停止消费了，所以退出
-				c.Consumer.Close()
-				break
+		defer reader.Close()
+		for c.running[topic] {
+			m, err := reader.ReadMessage(context.Background())
+			if err != nil {
+				logger.Error.Println(err)
 			}
+			if m.Offset > c.OffsetDict[topic] {
+				c.OffsetDict[topic] = m.Offset
+				func() {
+					defer func() {
+						if err := recover(); err != nil {
+							logger.Error.Println(err)
+						}
+					}()
+					callback(m.Value)
+				}()
+			} else {
+				logger.Error.Println("skipping because of offset")
+			}
+
 		}
-	}()
-	//周期性的提交偏移量
-	go func() {
-		for c.IsInitialized {
-			time.Sleep(1000 * time.Millisecond)
-			c.Consumer.Commit()
-		}
+
 	}()
 	return nil
 }
 
-// NewConsumer 返回消费者.
+// NewConsumer 实例化返回消费者.
 func NewConsumer(hosts string, groupID string) *Consumer {
+
 	c := &Consumer{}
-	c.Config = confluentKafka.ConfigMap{}
-	c.OffsetDict = make(map[string]confluentKafka.Offset)
-	c.ConfigServers(hosts)
+	c.Config = make(map[string]interface{})
+	c.Readers = make(map[string]*k.Reader)
+	// c.Params = make(map[string]string)
+	c.running = make(map[string]bool)
+	c.OffsetDict = make(map[string]int64)
 	c.ConfigGroupID(groupID)
-	//c.ConfigPartition(0)
-	c.ConfigHeartbeatInterval(2000)
-	c.ConfigSessionTimeout(6000)
-	c.ConfigMaxPollIntervalMS(60 * 1000)
+	c.Brokers = strings.Split(hosts, ",")
+
 	return c
 }
