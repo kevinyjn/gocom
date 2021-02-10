@@ -61,24 +61,22 @@ func InitKafka(mqConnName string, config Config) (*KafkaWorker, error) {
 			config.PrivateTopic = ""
 		}
 		instance = NewKafkaWorker(config.Hosts, config.Partition, config.PrivateTopic, config.GroupID)
-		if config.KerberosServiceName != "" && config.KerberosKeytab != "" && config.KerberosPrincipal != "" {
-			instance.Producer.ConfigKerberosServiceName(config.KerberosServiceName)
-			instance.Producer.ConfigKerberosKeyTab(config.KerberosKeytab)
-			instance.Producer.ConfigKerberosPrincipal(config.KerberosPrincipal)
-			instance.Producer.ConfigSecurityProtocol("sasl_plaintext")
+		// if config.KerberosServiceName != "" && config.KerberosKeytab != "" && config.KerberosPrincipal != "" {
+		// 	instance.Producer.ConfigKerberosServiceName(config.KerberosServiceName)
+		// 	instance.Producer.ConfigKerberosKeyTab(config.KerberosKeytab)
+		// 	instance.Producer.ConfigKerberosPrincipal(config.KerberosPrincipal)
+		// 	instance.Producer.ConfigSecurityProtocol("sasl_plaintext")
 
-			instance.Consumer.ConfigKerberosServiceName(config.KerberosServiceName)
-			instance.Consumer.ConfigKerberosKeyTab(config.KerberosKeytab)
-			instance.Consumer.ConfigKerberosPrincipal(config.KerberosPrincipal)
-			instance.Consumer.ConfigSecurityProtocol("sasl_plaintext")
-		}
-		if config.SaslMechanisms != "" && config.SaslUsername != "" && config.SaslPassword != "" {
-			instance.Producer.ConfigSaslMechanisms(config.SaslMechanisms)
+		// 	instance.Consumer.ConfigKerberosServiceName(config.KerberosServiceName)
+		// 	instance.Consumer.ConfigKerberosKeyTab(config.KerberosKeytab)
+		// 	instance.Consumer.ConfigKerberosPrincipal(config.KerberosPrincipal)
+		// 	instance.Consumer.ConfigSecurityProtocol("sasl_plaintext")
+		// }
+		if config.SaslUsername != "" && config.SaslPassword != "" {
 			instance.Producer.ConfigSaslUserName(config.SaslUsername)
 			instance.Producer.ConfigSaslPassword(config.SaslPassword)
 			instance.Producer.ConfigSecurityProtocol("sasl_plaintext")
 
-			instance.Consumer.ConfigSaslMechanisms(config.SaslMechanisms)
 			instance.Consumer.ConfigSaslUserName(config.SaslUsername)
 			instance.Consumer.ConfigSaslPassword(config.SaslPassword)
 			instance.Consumer.ConfigSecurityProtocol("sasl_plaintext")

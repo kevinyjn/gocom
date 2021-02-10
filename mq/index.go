@@ -115,18 +115,14 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 		_, initErr = rabbitmq.InitRabbitMQ(topicCategory, &instCnf, amqpCfg)
 	} else if mqenv.DriverTypeKafka == instCnf.Driver {
 		kafakCfg := kafka.Config{
-			Hosts:               instCnf.Host,
-			Partition:           topicConfig.Partition,
-			PrivateTopic:        topicConfig.PrivateTopic,
-			GroupID:             topicConfig.GroupID,
-			MaxPollIntervalMS:   topicConfig.MaxPollIntervalMS,
-			KerberosServiceName: topicConfig.KerberosServiceName,
-			KerberosKeytab:      topicConfig.KerberosKeytab,
-			KerberosPrincipal:   topicConfig.KerberosPrincipal,
-			SaslMechanisms:      topicConfig.SaslMechanisms,
-			SaslUsername:        topicConfig.SaslUsername,
-			SaslPassword:        topicConfig.SaslPassword,
-			MessageType:         topicConfig.MessageType,
+			Hosts:             instCnf.Host,
+			Partition:         topicConfig.Partition,
+			PrivateTopic:      topicConfig.PrivateTopic,
+			GroupID:           topicConfig.GroupID,
+			MaxPollIntervalMS: topicConfig.MaxPollIntervalMS,
+			SaslUsername:      instCnf.User,
+			SaslPassword:      instCnf.Password,
+			MessageType:       topicConfig.MessageType,
 		}
 		_, initErr = kafka.InitKafka(topicCategory, kafakCfg)
 	}

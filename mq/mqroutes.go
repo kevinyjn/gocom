@@ -36,14 +36,6 @@ type Config struct {
 	//direct:组播,订阅同一个topic，消费者组会相同，一条消息只会被组内一个消费者接收
 	//fanout:广播,订阅同一个topic，但是消费者组会使用uuid，所有组都会收到信息
 	MessageType string `yaml:"messageType" json:"messageType"`
-	// kerberos 认证需要配置
-	KerberosServiceName string `yaml:"kerberosServiceName" json:"kerberosServiceName"`
-	KerberosKeytab      string `yaml:"kerberosKeytab" json:"kerberosKeytab"`
-	KerberosPrincipal   string `yaml:"kerberosPrincipal" json:"kerberosPrincipal"`
-	// plain 认证需要配置
-	SaslMechanisms string `yaml:"saslMechanisms" json:"saslMechanisms"`
-	SaslUsername   string `yaml:"saslUsername" json:"saslUsername"`
-	SaslPassword   string `yaml:"saslPassword" json:"saslPassword"`
 }
 
 // RoutesEnv struct

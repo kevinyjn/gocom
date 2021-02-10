@@ -50,6 +50,7 @@ func (c *Consumer) Receive(topic string, callback CallBack) error {
 		return errors.New("The topic is already subscribed")
 	}
 	logger.Debug.Printf("group_id:%s\n", c.Config["group.id"])
+	logger.Debug.Printf("%+v", c.Config)
 	config := k.ReaderConfig{
 		Brokers:        c.Brokers,
 		GroupID:        c.Config["group.id"].(string),
@@ -71,6 +72,7 @@ func (c *Consumer) Receive(topic string, callback CallBack) error {
 	// 	config.ReadBackoffMax
 	// }
 	if c.Config["sasl.username"] != nil && c.Config["sasl.password"] != nil {
+		logger.Debug.Println("using sasl ")
 		mechanism := plain.Mechanism{
 			Username: c.Config["sasl.username"].(string),
 			Password: c.Config["sasl.password"].(string),

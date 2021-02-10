@@ -31,6 +31,7 @@ func (p *Producer) Send(topic string, value []byte) error {
 		}
 		// logger.Trace.Printf("new writer %s", topic)
 		if p.Config["sasl.username"] != nil && p.Config["sasl.password"] != nil {
+			logger.Debug.Println("using sasl ")
 			mechanism := plain.Mechanism{
 				Username: p.Config["sasl.username"].(string),
 				Password: p.Config["sasl.password"].(string),
