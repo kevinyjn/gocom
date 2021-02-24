@@ -22,7 +22,7 @@ func main() {
 
 	_, err = rdbms.GetInstance().Init("default", &dbConfig)
 	if nil != err {
-		fmt.Sprintf("initialize database entine failed with error:%v", err)
+		fmt.Printf("initialize database entine failed with error:%v", err)
 		return
 	}
 

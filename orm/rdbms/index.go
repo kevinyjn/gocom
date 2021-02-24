@@ -527,6 +527,12 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 				}
 			}
 		}
+	} else if reflect.TypeOf(beanOrTableName).Kind() != reflect.String {
+		err = orm.Sync(beanOrTableName)
+		if nil != err {
+			logger.Error.Printf("Syncronize tables structure with bean:%v faield with error:%v", beanOrTableName, err)
+			return err
+		}
 	}
 
 	return nil
