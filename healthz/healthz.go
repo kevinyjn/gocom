@@ -194,6 +194,9 @@ func handlerHealthz(ctx iris.Context) {
 	// ticker := time.NewTicker(100 * time.Millisecond)
 	timeoutTicker := time.NewTicker(2 * time.Second)
 	quitTiker := make(chan struct{})
+	if len(checkParts) <= 0 && false == mqCheckObject.NotEmpty() {
+		stillChecking = false
+	}
 
 	for mqCheckObject.NotEmpty() || stillChecking {
 		if !mqCheckObject.NotEmpty() {

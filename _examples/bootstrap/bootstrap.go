@@ -5,6 +5,7 @@ import (
 
 	"github.com/kevinyjn/gocom/application"
 	"github.com/kevinyjn/gocom/config"
+	"github.com/kevinyjn/gocom/healthz"
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq"
 
@@ -34,7 +35,8 @@ func main() {
 	defer accessLoggerClose()
 	app.Use(accessLogger)
 	app.RegisterView(iris.HTML(config.TemplateViewPath, config.TemplateViewEndfix))
-	app.Favicon(config.Favicon)
+	// app.Favicon(config.Favicon)
 	app.StaticWeb(config.StaticRoute, config.StaticAssets)
+	healthz.InitHealthz(app)
 	app.Run(iris.Addr(listenAddr), iris.WithoutServerError(iris.ErrServerClosed))
 }
