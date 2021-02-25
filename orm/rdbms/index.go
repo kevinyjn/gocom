@@ -498,7 +498,7 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 	if false == ok {
 		err = orm.CreateTables(beanOrTableName)
 		if nil != err {
-			logger.Error.Printf("Create tables faield with error:%v", err)
+			logger.Error.Printf("Create table %s faield with error:%v", getTableName(beanOrTableName), err)
 			return err
 		}
 
@@ -530,7 +530,7 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 	} else if reflect.TypeOf(beanOrTableName).Kind() != reflect.String {
 		err = orm.Sync(beanOrTableName)
 		if nil != err {
-			logger.Error.Printf("Syncronize tables structure with bean:%v faield with error:%v", beanOrTableName, err)
+			logger.Error.Printf("Syncronize table %s structure with bean:%+v faield with error:%v", getTableName(beanOrTableName), beanOrTableName, err)
 			return err
 		}
 	}
