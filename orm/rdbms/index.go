@@ -485,30 +485,30 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 	}
 	orm, err := dae.ensureDbEngine(datasourceName)
 	if nil != err {
-		logger.Error.Printf("ensuring table %s on database while ensure the database engine failed with error:%v", getTableName(beanOrTableName), err)
+		logger.Error.Printf("ensuring table '%s' on database while ensure the database engine failed with error:%v", getTableName(beanOrTableName), err)
 		return err
 	}
 
 	ok, err = orm.IsTableExist(beanOrTableName)
 	if nil != err {
-		logger.Error.Printf("ensuring table %s on database while check table exists failed with error:%v", getTableName(beanOrTableName), err)
+		logger.Error.Printf("ensuring table '%s' on database while check table exists failed with error:%v", getTableName(beanOrTableName), err)
 		return err
 	}
 
 	if false == ok {
 		err = orm.CreateTables(beanOrTableName)
 		if nil != err {
-			logger.Error.Printf("Create table %s faield with error:%v", getTableName(beanOrTableName), err)
+			logger.Error.Printf("Create table '%s' faield with error:%v", getTableName(beanOrTableName), err)
 			return err
 		}
 
 		err = orm.CreateIndexes(beanOrTableName)
 		if nil != err {
-			logger.Warning.Printf("Create table %s indexes faield with error:%v", getTableName(beanOrTableName), err)
+			logger.Warning.Printf("Create table '%s' indexes faield with error:%v", getTableName(beanOrTableName), err)
 		}
 		err = orm.CreateUniques(beanOrTableName)
 		if nil != err {
-			logger.Warning.Printf("Create table %s unique indexes faield with error:%v", getTableName(beanOrTableName), err)
+			logger.Warning.Printf("Create table '%s' unique indexes faield with error:%v", getTableName(beanOrTableName), err)
 		}
 
 		if false {
@@ -530,7 +530,7 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 	} else if reflect.TypeOf(beanOrTableName).Kind() != reflect.String {
 		err = orm.Sync(beanOrTableName)
 		if nil != err {
-			logger.Error.Printf("Syncronize table %s structure with bean:%+v faield with error:%v", getTableName(beanOrTableName), beanOrTableName, err)
+			logger.Error.Printf("Syncronize table '%s' structure with bean:%+v faield with error:%v", getTableName(beanOrTableName), beanOrTableName, err)
 			return err
 		}
 	}
