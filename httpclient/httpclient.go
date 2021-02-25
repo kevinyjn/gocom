@@ -295,10 +295,13 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	if opts.tlsOptions != nil && opts.tlsOptions.Enabled {
-		certs, err := tls.LoadX509KeyPair(opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile)
-		if err != nil {
-			logger.Error.Printf("Load tls certificates:%s and %s failed with error:%v", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile, err)
-			return nil, err
+		if "" != opts.tlsOptions.CertFile || "" != opts.tlsOptions.KeyFile {
+			certs, err := tls.LoadX509KeyPair(opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile)
+			if err != nil {
+				logger.Error.Printf("Load tls certificates:%s and %s failed with error:%v", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile, err)
+				return nil, err
+			}
+			tlsConfig.Certificates = []tls.Certificate{certs}
 		}
 
 		// ca, err := x509.ParseCertificate(certs.Certificate[0])
@@ -319,8 +322,6 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 			tlsConfig.RootCAs = caPool
 		}
 		// tlsConfig.BuildNameToCertificate()
-
-		tlsConfig.Certificates = []tls.Certificate{certs}
 		tlsConfig.InsecureSkipVerify = opts.tlsOptions.SkipVerify
 		// tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
 
