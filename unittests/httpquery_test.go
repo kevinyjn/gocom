@@ -19,7 +19,7 @@ func TestHTTPQueryWithRetry(t *testing.T) {
 }
 
 func TestHTTPQueryKubernetesAPI(t *testing.T) {
-	url := "https://10.10.2.217:6444"
+	url := "https://127.0.0.1:6443"
 	api := "/api/v1/namespaces/dev/pods/a113-0.0.8-68f9fddff-gp9lb-noexists"
 	caFile := "./tests/kubeapi/ca.crt"
 	tokenFile := "./tests/kubeapi/token"
@@ -37,7 +37,7 @@ func TestHTTPQueryKubernetesAPI(t *testing.T) {
 	headers := map[string]string{
 		"Authorization": "Bearer " + token,
 	}
-	resp, err := httpclient.HTTPQuery("GET", url+api, nil, httpclient.WithHTTPTLSOptions(&tlsOption), httpclient.WithHTTPHeaders(headers))
+	resp, err := httpclient.HTTPQuery("GET", url+api, nil, httpclient.WithHTTPTLSOptions(&tlsOption), httpclient.WithHTTPHeaders(headers), httpclient.WithSuccessStatusCodes(404))
 	if nil != err {
 		fmt.Printf("api:%s failed with error:%+v", api, err)
 	}

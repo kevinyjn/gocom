@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -27,12 +28,13 @@ const (
 )
 
 type httpClientOption struct {
-	headers     map[string]string
-	tlsOptions  *definations.TLSOptions
-	proxies     *definations.Proxies
-	timeouts    time.Duration
-	retries     int // retry times that already executed
-	shouldRetry int // retry times that caller expectes
+	headers       map[string]string
+	tlsOptions    *definations.TLSOptions
+	proxies       *definations.Proxies
+	timeouts      time.Duration
+	retries       int // retry times that already executed
+	shouldRetry   int // retry times that caller expectes
+	successStatus map[int]bool
 }
 
 // ClientOption http client option
@@ -56,8 +58,9 @@ func newFuncHTTPClientOption(f func(*httpClientOption)) *funcHTTPClientOption {
 
 func defaultHTTPClientOptions() httpClientOption {
 	return httpClientOption{
-		headers:    map[string]string{},
-		tlsOptions: nil,
+		headers:       map[string]string{},
+		tlsOptions:    nil,
+		successStatus: map[int]bool{},
 	}
 }
 
@@ -66,8 +69,9 @@ func defaultHTTPClientJSONOptions() httpClientOption {
 		headers: map[string]string{
 			"Content-Type": "application/json",
 		},
-		tlsOptions: nil,
-		timeouts:   time.Second * 30,
+		tlsOptions:    nil,
+		timeouts:      time.Second * 30,
+		successStatus: map[int]bool{},
 	}
 }
 
@@ -130,6 +134,20 @@ func WithTimeout(timeoutSeconds int) ClientOption {
 func WithRetry(shouldRetryTimes int) ClientOption {
 	return newFuncHTTPClientOption(func(o *httpClientOption) {
 		o.shouldRetry = shouldRetryTimes
+	})
+}
+
+// WithSuccessStatusCodes options
+func WithSuccessStatusCodes(codes ...int) ClientOption {
+	return newFuncHTTPClientOption(func(o *httpClientOption) {
+		if nil != codes {
+			for _, code := range codes {
+				if nil == o.successStatus {
+					o.successStatus = map[int]bool{}
+				}
+				o.successStatus[code] = true
+			}
+		}
 	})
 }
 
@@ -347,7 +365,7 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	if err != nil {
 		logger.Error.Printf("query %s failed with error:%v", queryURL, err)
 		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
-		afterQueryFailed(-1, err, []byte(err.Error()), method, queryURL, bodyBuffer, &opts)
+		afterQueryFailed(-1, err, []byte(err.Error()), method, queryURL, bodyBuffer, &opts, logger.Error)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -356,11 +374,14 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	if err != nil {
 		logger.Error.Printf("Read result by queried url:%s failed with error:%v", queryURL, err)
 		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
-		afterQueryFailed(resp.StatusCode, err, []byte(err.Error()), method, queryURL, bodyBuffer, &opts)
+		afterQueryFailed(resp.StatusCode, err, []byte(err.Error()), method, queryURL, bodyBuffer, &opts, logger.Error)
 		return nil, err
 	}
 
 	if resp.StatusCode != 200 {
+		if nil != opts.successStatus && opts.successStatus[resp.StatusCode] {
+			return respBody, nil
+		}
 		if resp.StatusCode == http.StatusMovedPermanently || resp.StatusCode == http.StatusFound {
 			newLocation := resp.Header.Get("location")
 			logger.Info.Printf("query %s while got status:%d for location:%s", queryURL, resp.StatusCode, newLocation)
@@ -370,8 +391,8 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 		}
 		err = errors.New(resp.Status)
 		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
-		afterQueryFailed(resp.StatusCode, err, respBody, method, queryURL, bodyBuffer, &opts)
-		return nil, err
+		afterQueryFailed(resp.StatusCode, err, respBody, method, queryURL, bodyBuffer, &opts, logger.Warning)
+		return respBody, err
 	}
 
 	if opts.retries > 0 {
@@ -393,8 +414,8 @@ func getQueryBodyBuffer(url string, body io.Reader) []byte {
 	return result
 }
 
-func afterQueryFailed(respStatusCode int, err error, respBody []byte, method string, queryURL string, body []byte, opts *httpClientOption) {
-	logger.Error.Output(2, fmt.Sprintf("Error: query %s failed with error(code:%d):%v body:%s", queryURL, respStatusCode, err, string(respBody)))
+func afterQueryFailed(respStatusCode int, err error, respBody []byte, method string, queryURL string, body []byte, opts *httpClientOption, failureLogger *log.Logger) {
+	failureLogger.Output(2, fmt.Sprintf("Error: query %s failed with error(code:%d):%v body:%s", queryURL, respStatusCode, err, string(respBody)))
 	if opts.shouldRetry > 0 {
 		if opts.retries >= opts.shouldRetry {
 			logger.Error.Printf("query %s failed with %d retries, skip retring", queryURL, opts.retries)
