@@ -56,6 +56,11 @@ type Stats struct {
 func InitKafka(mqConnName string, config Config) (*KafkaWorker, error) {
 	instance, ok := kafkaInstances[mqConnName]
 	if !ok {
+		if config.PrivateTopic == "" {
+			config.PrivateTopic = utils.GenUUID()
+		} else {
+			config.PrivateTopic += "-" + utils.GenUUID()[:10]
+		}
 		if config.MessageType == "fanout" {
 			config.GroupID = utils.GenUUID()
 			config.PrivateTopic = ""
