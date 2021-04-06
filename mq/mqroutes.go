@@ -29,13 +29,13 @@ type Config struct {
 	// Kafka parameters
 	Topic             string `yaml:"topic" json:"topic"`
 	GroupID           string `yaml:"groupId" json:"groupId"`
-	PrivateTopic      string `yaml:"privateTopic" json:"privateTopic"`
 	Partition         int    `yaml:"partition" json:"partition"`
 	MaxPollIntervalMS int    `yaml:"maxPollIntervalMs" json:"maxPollIntervalMs"`
 	// 消息类型:
 	//direct:组播,订阅同一个topic，消费者组会相同，一条消息只会被组内一个消费者接收
 	//fanout:广播,订阅同一个topic，但是消费者组会使用uuid，所有组都会收到信息
-	MessageType string `yaml:"messageType" json:"messageType"`
+	MessageType        string `yaml:"messageType" json:"messageType"`
+	UseOriginalContent bool   `yaml:"useOriginalContent" json:"useOriginalContent"`
 }
 
 // RoutesEnv struct

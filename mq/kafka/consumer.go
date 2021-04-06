@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/utils"
 	k "github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/plain"
 )
@@ -51,9 +52,14 @@ func (c *Consumer) Receive(topic string, callback CallBack) error {
 	}
 	logger.Debug.Printf("group_id:%s\n", c.Config["group.id"])
 	logger.Debug.Printf("%+v", c.Config)
+	groupID := c.Config["group.id"].(string)
+	if groupID == "" {
+		groupID = topic + "-" + utils.GenUUID()
+	}
+	logger.Debug.Println(groupID)
 	config := k.ReaderConfig{
 		Brokers:        c.Brokers,
-		GroupID:        c.Config["group.id"].(string),
+		GroupID:        groupID,
 		Topic:          topic,
 		MinBytes:       1,    // 1 Byte
 		MaxBytes:       10e6, // 10MB
