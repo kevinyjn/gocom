@@ -193,6 +193,9 @@ func (worker *KafkaWorker) reply(topic string, message *mqenv.MQPublishMessage, 
 		ErrorMessage:    "success",
 		Body:            message.Body,
 		Headers:         headers,
+		RoutingKey:      message.ReplyTo,
+		ConsumerTag:     message.ReplyTo,
+		Exchange:        topic,
 	}
 	var sendBytes []byte
 	var err error
