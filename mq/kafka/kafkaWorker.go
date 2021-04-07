@@ -1,6 +1,8 @@
 package kafka
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -17,7 +19,8 @@ type Worker func(*KafkaPacket) []byte
 type KafkaWorker struct {
 	Producer            *Producer                         // 生产者
 	Consumer            *Consumer                         // 消费者
-	consumerRegisters   map[string]*mqenv.MQConsumerProxy // 处理函数字典
+	consumerRegisters   map[string]*mqenv.MQConsumerProxy // 已经订阅的topic
+	methodRegisters     map[string]*mqenv.MQConsumerProxy // 处理函数字典
 	PrivateTopic        string                            // 私有topic，用于发出信息后收到回复
 	waitResponseMessage map[string]chan *KafkaPacket      //发出信息后，会以消息id为key 保存在字典中，值是通道。通过通道来接收信息
 	availableChannels   []chan *KafkaPacket               // 可用于接收的通道切片
@@ -27,6 +30,7 @@ type KafkaWorker struct {
 	GroupID             string                            //组id，会包含在 kafkapacket 数据包中
 	MsgType             string                            // 消息类型
 	Stats               Stats                             // 统计信息
+	UseOriginalContent  bool                              // 是否使用原始的方式序列化(使用json 序列化，而不是protobuf)
 }
 
 // newChannel 返回一个新的 字节数组通道.
@@ -71,7 +75,7 @@ func (worker *KafkaWorker) sendWorker(topic string, message []byte) error {
 // sendOpenChannel 用于创建私有topic 或第一次发topic发送信息，用于把通道打开.
 func (worker *KafkaWorker) sendOpenChannel(topic string) error {
 	registerValue := []byte("{'_register_private': 'open'}")
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		err := worker.Producer.Send(topic, registerValue)
 		if nil != err {
 			logger.Error.Println(err)
@@ -130,8 +134,18 @@ func (worker *KafkaWorker) Send(topic string, publishMsg *mqenv.MQPublishMessage
 		ErrorMessage:    "success",
 		Body:            publishMsg.Body,
 		Headers:         headers,
+		RoutingKey:      publishMsg.RoutingKey,
+		ConsumerTag:     publishMsg.RoutingKey,
+		Exchange:        publishMsg.Exchange,
 	}
-	sendBytes, err := proto.Marshal(p)
+	var sendBytes []byte
+	var err error
+	if worker.UseOriginalContent {
+		sendBytes, err = json.Marshal(p)
+	} else {
+		sendBytes, err = proto.Marshal(p)
+	}
+
 	if err != nil {
 		logger.Error.Println(err)
 		return nil, err
@@ -179,8 +193,18 @@ func (worker *KafkaWorker) reply(topic string, message *mqenv.MQPublishMessage, 
 		ErrorMessage:    "success",
 		Body:            message.Body,
 		Headers:         headers,
+		RoutingKey:      message.ReplyTo,
+		ConsumerTag:     message.ReplyTo,
+		Exchange:        topic,
 	}
-	sendBytes, err := proto.Marshal(p)
+	var sendBytes []byte
+	var err error
+	if worker.UseOriginalContent {
+		sendBytes, err = json.Marshal(p)
+	} else {
+		sendBytes, err = proto.Marshal(p)
+	}
+
 	if err != nil {
 		logger.Error.Println(err)
 	}
@@ -200,7 +224,14 @@ func (worker *KafkaWorker) onMessage(packet *KafkaPacket) {
 		delete(worker.waitResponseMessage, packet.CorrelationId)
 		ch <- packet
 	} else {
-		consumerProxy, isExits := worker.consumerRegisters[packet.SendTo]
+		//consumerProxy, isExits := worker.consumerRegisters[packet.SendTo]
+		// 先从包含具体方法的字典(methodRegisters)查找处理函数
+		//如果找不到就从订阅topic的字典(consumerRegisters)查找
+		key := fmt.Sprintf("%s-%s", packet.SendTo, packet.RoutingKey)
+		consumerProxy, isExits := worker.methodRegisters[key]
+		if !isExits {
+			consumerProxy, isExits = worker.consumerRegisters[packet.SendTo]
+		}
 		if isExits {
 			func() {
 				defer func() {
@@ -237,23 +268,64 @@ func (worker *KafkaWorker) bindToOnMessage(data []byte) {
 	worker.Stats.Consumer.Bytes += int64(len(data))
 	worker.Stats.Consumer.Messages++
 	p := &KafkaPacket{}
-	err := proto.Unmarshal(data, p)
+	var err error
+	if worker.UseOriginalContent {
+		err = json.Unmarshal(data, p)
+
+	} else {
+		err = proto.Unmarshal(data, p)
+	}
 	if err != nil {
 		logger.Error.Println(err)
 	} else {
+		worker.extractRoutingKey(p)
 		worker.onMessage(p)
 	}
 
 }
 
 // Subscribe 订阅topic.
-func (worker *KafkaWorker) Subscribe(topic string, consumeProxy *mqenv.MQConsumerProxy) {
+func (worker *KafkaWorker) Subscribe(topic string, consumeProxy *mqenv.MQConsumerProxy) error {
+
 	_, ok := worker.consumerRegisters[topic]
 	if !ok {
 		logger.Info.Println("Subscribe subscribing topic " + topic)
 		worker.Consumer.Receive(topic, worker.bindToOnMessage)
 		worker.consumerRegisters[topic] = consumeProxy
+
 	}
+	key := fmt.Sprintf("%s-%s", consumeProxy.Queue, consumeProxy.ConsumerTag)
+	_, ok = worker.methodRegisters[key]
+	if !ok {
+		worker.methodRegisters[key] = consumeProxy
+	}
+	return nil
+}
+
+// extractRoutingKey 尝试从body 里面提取routing key.
+func (worker *KafkaWorker) extractRoutingKey(packet *KafkaPacket) error {
+
+	if packet.RoutingKey != "" {
+		return nil
+	}
+	var params struct {
+		Method     string `json:"method"`
+		RoutingKey string `json:"routingKey"`
+	}
+	err := json.Unmarshal(packet.Body, &params)
+	if nil != err {
+		logger.Error.Println(err)
+		return err
+	}
+	if params.Method != "" {
+		packet.RoutingKey = params.Method
+		return nil
+	}
+	if params.RoutingKey != "" {
+		packet.RoutingKey = params.RoutingKey
+		return nil
+	}
+	return fmt.Errorf("cannot found method value")
 }
 
 // NewKafkaWorker 实例化一个kafka worker.
@@ -265,6 +337,7 @@ func NewKafkaWorker(hosts string, partition int, privateTopic, groupID string) *
 	worker.waitResponseMessage = make(map[string]chan *KafkaPacket)
 	worker.availableChannels = []chan *KafkaPacket{}
 	worker.consumerRegisters = make(map[string]*mqenv.MQConsumerProxy)
+	worker.methodRegisters = make(map[string]*mqenv.MQConsumerProxy)
 	worker.openTopicChannel = make(map[string]string)
 	worker.Stats.Consumer = InstStats{}
 	worker.Stats.Producer = InstStats{}

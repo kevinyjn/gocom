@@ -27,9 +27,10 @@ type Config struct {
 	KerberosKeytab      string
 	KerberosPrincipal   string
 	// plain 认证需要配置
-	SaslMechanisms string
-	SaslUsername   string
-	SaslPassword   string
+	SaslMechanisms     string
+	SaslUsername       string
+	SaslPassword       string
+	UseOriginalContent bool `yaml:"useOriginalContent" json:"useOriginalContent"`
 }
 
 // InstStats .
@@ -57,7 +58,7 @@ func InitKafka(mqConnName string, config Config) (*KafkaWorker, error) {
 	instance, ok := kafkaInstances[mqConnName]
 	if !ok {
 		if config.PrivateTopic == "" {
-			config.PrivateTopic = utils.GenUUID()
+			config.PrivateTopic = "rpc-" + utils.GenUUID()
 		} else {
 			config.PrivateTopic += "-" + utils.GenUUID()[:10]
 		}
@@ -66,6 +67,7 @@ func InitKafka(mqConnName string, config Config) (*KafkaWorker, error) {
 			config.PrivateTopic = ""
 		}
 		instance = NewKafkaWorker(config.Hosts, config.Partition, config.PrivateTopic, config.GroupID)
+		instance.UseOriginalContent = config.UseOriginalContent
 		// if config.KerberosServiceName != "" && config.KerberosKeytab != "" && config.KerberosPrincipal != "" {
 		// 	instance.Producer.ConfigKerberosServiceName(config.KerberosServiceName)
 		// 	instance.Producer.ConfigKerberosKeyTab(config.KerberosKeytab)
@@ -111,14 +113,14 @@ func ConvertKafkaPacketToMQConsumerMessage(packet *KafkaPacket) mqenv.MQConsumer
 		Driver:        mqenv.DriverTypeKafka,
 		Queue:         packet.SendTo,
 		CorrelationID: packet.CorrelationId,
-		ConsumerTag:   "",
+		ConsumerTag:   packet.ConsumerTag,
 		ReplyTo:       packet.ReplyTo,
 		MessageID:     packet.MessageId,
 		AppID:         packet.AppId,
 		UserID:        packet.UserId,
 		ContentType:   packet.ContentType,
-		Exchange:      "",
-		RoutingKey:    "",
+		Exchange:      packet.Exchange,
+		RoutingKey:    packet.RoutingKey,
 		Timestamp:     time.Unix(int64(packet.Timestamp), 0),
 		Body:          packet.Body,
 		BindData:      &packet,

@@ -118,14 +118,14 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 		break
 	case mqenv.DriverTypeKafka:
 		kafakCfg := kafka.Config{
-			Hosts:             instCnf.Host,
-			Partition:         topicConfig.Partition,
-			PrivateTopic:      topicConfig.PrivateTopic,
-			GroupID:           topicConfig.GroupID,
-			MaxPollIntervalMS: topicConfig.MaxPollIntervalMS,
-			SaslUsername:      instCnf.User,
-			SaslPassword:      instCnf.Password,
-			MessageType:       topicConfig.MessageType,
+			Hosts:              instCnf.Host,
+			Partition:          topicConfig.Partition,
+			GroupID:            topicConfig.GroupID,
+			MaxPollIntervalMS:  topicConfig.MaxPollIntervalMS,
+			SaslUsername:       instCnf.User,
+			SaslPassword:       instCnf.Password,
+			MessageType:        topicConfig.MessageType,
+			UseOriginalContent: topicConfig.UseOriginalContent,
 		}
 		_, initErr = kafka.InitKafka(topicCategory, kafakCfg)
 		break
@@ -317,7 +317,7 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 		if nil != err {
 			return err
 		}
-		inst.Send(publishMsg.RoutingKey, publishMsg, false)
+		inst.Send(publishMsg.Exchange, publishMsg, false)
 		break
 	case mqenv.DriverTypeMock:
 		inst, err := mockmq.GetMockMQ(mqCategory)
@@ -355,7 +355,7 @@ func QueryMQ(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMe
 		if nil != err {
 			return nil, err
 		}
-		return inst.Send(pm.RoutingKey, pm, true)
+		return inst.Send(pm.Exchange, pm, true)
 	case mqenv.DriverTypeMock:
 		inst, err := mockmq.GetMockMQ(mqCategory)
 		if nil != err {
