@@ -265,7 +265,7 @@ func handlerHealthz(ctx iris.Context) {
 func initHealthzMQConsumer() {
 	mqconfs := mq.GetAllMQDriverConfigs()
 	for instName := range mqconfs {
-		category := fmt.Sprintf("amqp-%s-healthz", instName)
+		category := fmt.Sprintf("mq-%s-healthz", instName)
 		mqconf := mq.Config{
 			Instance: instName,
 			Queue:    fmt.Sprintf("healthz-%s", gocom.GlobalUUID),

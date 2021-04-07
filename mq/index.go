@@ -7,6 +7,7 @@ import (
 
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq/kafka"
+	"github.com/kevinyjn/gocom/mq/mockmq"
 	"github.com/kevinyjn/gocom/mq/mqenv"
 	"github.com/kevinyjn/gocom/mq/rabbitmq"
 )
@@ -86,7 +87,7 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 		mqConnConfigsMutex.Unlock()
 	}
 	if nil == GetMQConfig(topicCategory) {
-		GetMQRoutes()[topicCategory] = *topicConfig
+		SetMQConfig(topicCategory, *topicConfig)
 	}
 	var initErr error
 	mqCategoryDriversMutex.Lock()
@@ -98,7 +99,8 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 	}
 	mqCategoriesByInstance[topicConfig.Instance][topicCategory] = true
 	mqCategoriesByInstanceMutex.Unlock()
-	if instCnf.Driver == mqenv.DriverTypeAMQP {
+	switch instCnf.Driver {
+	case mqenv.DriverTypeAMQP:
 		amqpCfg := &rabbitmq.AMQPConfig{
 			ConnConfigName:  topicConfig.Instance,
 			Queue:           topicConfig.Queue,
@@ -113,7 +115,8 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			return nil
 		}
 		_, initErr = rabbitmq.InitRabbitMQ(topicCategory, &instCnf, amqpCfg)
-	} else if mqenv.DriverTypeKafka == instCnf.Driver {
+		break
+	case mqenv.DriverTypeKafka:
 		kafakCfg := kafka.Config{
 			Hosts:             instCnf.Host,
 			Partition:         topicConfig.Partition,
@@ -125,6 +128,14 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			MessageType:       topicConfig.MessageType,
 		}
 		_, initErr = kafka.InitKafka(topicCategory, kafakCfg)
+		break
+	case mqenv.DriverTypeMock:
+		mockCfg := mockmq.Config{}
+		_, initErr = mockmq.InitMockMQ(topicCategory, &instCnf, &mockCfg)
+		break
+	default:
+		initErr = fmt.Errorf("Initialize mq:%s with unknown driver:%s", topicCategory, instCnf.Driver)
+		break
 	}
 
 	if initErr != nil {
@@ -235,7 +246,8 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
 	mqCategoryDriversMutex.RUnlock()
-	if mqenv.DriverTypeAMQP == mqDriver {
+	switch mqDriver {
+	case mqenv.DriverTypeAMQP:
 		if mqConfig.RPCEnabled {
 			rpcInst := rabbitmq.GetRPCRabbitMQWithoutConnectedChecking(mqCategory)
 			if nil == rpcInst {
@@ -251,16 +263,25 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy, mqConfig.Exchange.Name)
 			inst.Consume <- pxy
 		}
-	} else if mqenv.DriverTypeKafka == mqDriver {
+		break
+	case mqenv.DriverTypeKafka:
 		inst, err := kafka.GetKafka(mqCategory)
 		if nil != err {
 			return err
 		}
 		inst.Subscribe(consumeProxy.Queue, consumeProxy)
-
-	} else {
+		break
+	case mqenv.DriverTypeMock:
+		inst, err := mockmq.GetMockMQ(mqCategory)
+		if nil != err {
+			return err
+		}
+		inst.Subscribe(consumeProxy.Queue, consumeProxy)
+		break
+	default:
 		logger.Error.Printf("Consume MQ with category:%s failed, unknwon driver:%s", mqCategory, mqDriver)
-		return fmt.Errorf("Invalid mq %s driver", mqCategory)
+		err = fmt.Errorf("Invalid mq %s driver", mqCategory)
+		break
 	}
 	return err
 }
@@ -275,7 +296,8 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
 	mqCategoryDriversMutex.RUnlock()
-	if mqenv.DriverTypeAMQP == mqDriver {
+	switch mqDriver {
+	case mqenv.DriverTypeAMQP:
 		if mqConfig.RPCEnabled {
 			rpcInst := rabbitmq.GetRPCRabbitMQ(mqCategory)
 			if nil == rpcInst {
@@ -289,22 +311,31 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 			}
 			inst.Publish <- publishMsg
 		}
-	} else if mqenv.DriverTypeKafka == mqDriver {
+		break
+	case mqenv.DriverTypeKafka:
 		inst, err := kafka.GetKafka(mqCategory)
 		if nil != err {
 			return err
 		}
 		inst.Send(publishMsg.RoutingKey, publishMsg, false)
-
-	} else {
+		break
+	case mqenv.DriverTypeMock:
+		inst, err := mockmq.GetMockMQ(mqCategory)
+		if nil != err {
+			return err
+		}
+		inst.Send(mqConfig.Topic, publishMsg, false)
+		break
+	default:
 		logger.Error.Printf("Publish MQ with category:%s failed, unknwon driver:%s", mqCategory, mqDriver)
-		return fmt.Errorf("Invalid mq %s driver", mqCategory)
+		err = fmt.Errorf("Invalid mq %s driver", mqCategory)
+		break
 	}
 	return err
 }
 
-// QueryMQRPC publishes a message and waiting the response
-func QueryMQRPC(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMessage, error) {
+// QueryMQ publishes a message and waiting the response
+func QueryMQ(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMessage, error) {
 	mqConfig := GetMQConfig(mqCategory)
 	if nil == mqConfig {
 		return nil, fmt.Errorf("Query RPC MQ with invalid category:%s", mqCategory)
@@ -312,20 +343,33 @@ func QueryMQRPC(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsume
 	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
 	mqCategoryDriversMutex.RUnlock()
-	if mqenv.DriverTypeAMQP == mqDriver {
+	switch mqDriver {
+	case mqenv.DriverTypeAMQP:
 		inst, err := rabbitmq.GetRabbitMQ(mqCategory)
 		if nil != err {
 			return nil, err
 		}
 		return inst.QueryRPC(pm)
-	} else if mqenv.DriverTypeKafka == mqDriver {
+	case mqenv.DriverTypeKafka:
 		inst, err := kafka.GetKafka(mqCategory)
 		if nil != err {
 			return nil, err
 		}
 		return inst.Send(pm.RoutingKey, pm, true)
+	case mqenv.DriverTypeMock:
+		inst, err := mockmq.GetMockMQ(mqCategory)
+		if nil != err {
+			return nil, err
+		}
+		return inst.Send(mqConfig.Topic, pm, true)
+	default:
+		return nil, fmt.Errorf("Query RPC MQ not supported driver:%s", mqDriver)
 	}
-	return nil, fmt.Errorf("Query RPC MQ not supported driver:%s", mqDriver)
+}
+
+// QueryMQRPC publishes a message and waiting the response
+func QueryMQRPC(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMessage, error) {
+	return QueryMQ(mqCategory, pm)
 }
 
 // SetupTrackerQueue name
@@ -338,4 +382,18 @@ func SetupTrackerQueue(queueName string) {
 // NewMQResponseMessage new mq response publish messge depends on mq consumer message
 func NewMQResponseMessage(body []byte, cm *mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
 	return mqenv.NewMQResponseMessage(body, cm)
+}
+
+// InitMockMQTopic for testing
+func InitMockMQTopic(mqCategory string, topic string) {
+	config := map[string]mqenv.MQConnectorConfig{
+		mqCategory: {
+			Driver: mqenv.DriverTypeMock,
+		},
+	}
+	mqConfig := Config{
+		Instance: mqCategory,
+		Topic:    topic,
+	}
+	InitMQTopic(mqCategory, &mqConfig, config)
 }

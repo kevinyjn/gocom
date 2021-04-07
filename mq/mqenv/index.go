@@ -11,6 +11,7 @@ import (
 const (
 	DriverTypeAMQP  = "rabbitmq"
 	DriverTypeKafka = "kafka"
+	DriverTypeMock  = "mock"
 
 	MQTypeConsumer  = 1
 	MQTypePublisher = 2
@@ -127,4 +128,25 @@ func NewMQResponseMessage(body []byte, cm *MQConsumerMessage) *MQPublishMessage 
 		}
 	}
 	return pm
+}
+
+// NewConsumerMessageFromPublishMessage new consumer message from publish message
+func NewConsumerMessageFromPublishMessage(pm *MQPublishMessage) MQConsumerMessage {
+	msg := MQConsumerMessage{
+		Driver:        DriverTypeMock,
+		Queue:         "",
+		CorrelationID: pm.CorrelationID,
+		ConsumerTag:   "",
+		ReplyTo:       pm.ReplyTo,
+		MessageID:     pm.MessageID,
+		AppID:         pm.AppID,
+		UserID:        pm.UserID,
+		ContentType:   pm.ContentType,
+		Exchange:      pm.Exchange,
+		RoutingKey:    pm.RoutingKey,
+		Timestamp:     time.Now(),
+		Body:          pm.Body,
+		BindData:      nil,
+	}
+	return msg
 }

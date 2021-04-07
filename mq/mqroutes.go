@@ -3,6 +3,7 @@ package mq
 import (
 	"fmt"
 	"path"
+	"sync"
 
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/yamlutils"
@@ -41,35 +42,56 @@ type Config struct {
 // RoutesEnv struct
 type RoutesEnv struct {
 	MQs map[string]Config `yaml:"mq"`
+	m   sync.RWMutex      `yaml:"-"`
 }
 
 var mqRoutesEnv = RoutesEnv{
 	MQs: map[string]Config{},
+	m:   sync.RWMutex{},
 }
 
 // GetMQConfig config
 func GetMQConfig(category string) *Config {
+	mqRoutesEnv.m.RLock()
 	cnf, ok := mqRoutesEnv.MQs[category]
+	mqRoutesEnv.m.RUnlock()
 	if ok {
 		return &cnf
 	}
 	return nil
 }
 
+// SetMQConfig with category
+func SetMQConfig(category string, cnf Config) {
+	mqRoutesEnv.m.Lock()
+	mqRoutesEnv.MQs[category] = cnf
+	mqRoutesEnv.m.Unlock()
+}
+
 // GetMQRoutes config map
 func GetMQRoutes() map[string]Config {
-	return mqRoutesEnv.MQs
+	results := map[string]Config{}
+	mqRoutesEnv.m.RLock()
+	for category, cnf := range mqRoutesEnv.MQs {
+		results[category] = cnf
+	}
+	mqRoutesEnv.m.RUnlock()
+	return results
 }
 
 // InitMQRoutesEnv initialize with configure file
 func InitMQRoutesEnv(configFile string) (*RoutesEnv, error) {
 	cfgLoaded := true
 	cfgDir, cfgFile := path.Split(configFile)
+	mqRoutesEnv.m.Lock()
 	err := yamlutils.LoadConfig(configFile, &mqRoutesEnv)
+	mqRoutesEnv.m.Unlock()
 	if err != nil {
 		cfgLoaded = false
 	}
+	mqRoutesEnv.m.Lock()
 	err = yamlutils.LoadConfig(path.Join(cfgDir, "local."+cfgFile), &mqRoutesEnv)
+	mqRoutesEnv.m.Unlock()
 	if !cfgLoaded && err != nil {
 		logger.Error.Println("Please check the mq configure file and restart.")
 	} else {

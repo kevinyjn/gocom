@@ -8,6 +8,7 @@ const (
 	Unauthorized           = 401
 	PaymentRequired        = 402
 	Forbidden              = 403
+	NotFound               = 404
 	InnerError             = 500
 	NotImplemented         = 501
 	ServiceUnavailable     = 503

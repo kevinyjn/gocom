@@ -8,10 +8,10 @@ import (
 
 // ResultObject result
 type ResultObject struct {
-	Code      int         `json:"code"`
-	Message   string      `json:"message"`
-	Data      interface{} `json:"data,omitempty"`
-	RequestSn interface{} `json:"requestSn,omitempty"`
+	Code      int         `json:"code" validate:"required" comment:"结果编码"`
+	Message   string      `json:"message" validate:"required" comment:"结果描述"`
+	Data      interface{} `json:"data,omitempty" validate:"optional" comment:"响应结果"`
+	RequestSn interface{} `json:"requestSn,omitempty" validate:"optional" comment:"请求序列号"`
 }
 
 // NewResultObject result
