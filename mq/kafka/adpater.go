@@ -123,7 +123,13 @@ func ConvertKafkaPacketToMQConsumerMessage(packet *KafkaPacket) mqenv.MQConsumer
 		RoutingKey:    packet.RoutingKey,
 		Timestamp:     time.Unix(int64(packet.Timestamp), 0),
 		Body:          packet.Body,
+		Headers:       map[string]string{},
 		BindData:      &packet,
+	}
+	if nil != packet.Headers {
+		for _, h := range packet.Headers {
+			consumerMessage.Headers[h.Name] = h.Value
+		}
 	}
 
 	return consumerMessage

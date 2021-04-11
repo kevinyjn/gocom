@@ -1,4 +1,4 @@
-package unittests
+package testingutil
 
 import "testing"
 
@@ -8,6 +8,15 @@ func AssertEquals(t *testing.T, expected interface{}, value interface{}, valueNa
 		return true
 	}
 	t.Fatalf("validate values %s:%+v not equals expected:%+v", valueName, value, expected)
+	return false
+}
+
+// AssertNotEquals asserts
+func AssertNotEquals(t *testing.T, expected interface{}, value interface{}, valueName string) bool {
+	if value != expected {
+		return true
+	}
+	t.Fatalf("validate values %s:%+v equals not expected:%+v", valueName, value, expected)
 	return false
 }
 

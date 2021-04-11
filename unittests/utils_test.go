@@ -2,9 +2,11 @@ package unittests
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/kevinyjn/gocom/testingutil"
 	"github.com/kevinyjn/gocom/utils"
 )
 
@@ -14,17 +16,17 @@ func TestUtilsSubUTF8Text(t *testing.T) {
 	v2 := utils.SubStringFromUTF8(text, 14, 0, true)
 	v3 := utils.SubStringUTF8(text, 4, 14)
 	v4 := utils.SubStringUTF8(text, 4, 15)
-	AssertEquals(t, "Go语言是Google开发的", v1, "sub(0, 14)")
-	AssertEquals(t, "Go语言是Google开发的...", v2, "sub(0, 14)")
-	AssertEquals(t, "一种静态", v3, "sub(14, 18)")
-	AssertEquals(t, "种静态强", v4, "sub(15, 19)")
+	testingutil.AssertEquals(t, "Go语言是Google开发的", v1, "sub(0, 14)")
+	testingutil.AssertEquals(t, "Go语言是Google开发的...", v2, "sub(0, 14)")
+	testingutil.AssertEquals(t, "一种静态", v3, "sub(14, 18)")
+	testingutil.AssertEquals(t, "种静态强", v4, "sub(15, 19)")
 }
 
 func TestUtilsHumanBytes(t *testing.T) {
-	AssertEquals(t, "1.21 GB", utils.HumanByteSize(1024*1024*1024+210*1024*1024+1036), "GB size")
-	AssertEquals(t, "1.21 MB", utils.HumanByteSize(1024*1024+210*1024+1036), "MB size")
-	AssertEquals(t, "10.21 KB", utils.HumanByteSize(10*1024+220), "KB size")
-	AssertEquals(t, "10240 Bytes", utils.HumanByteSize(10240), "Byte size")
+	testingutil.AssertEquals(t, "1.21 GB", utils.HumanByteSize(1024*1024*1024+210*1024*1024+1036), "GB size")
+	testingutil.AssertEquals(t, "1.21 MB", utils.HumanByteSize(1024*1024+210*1024+1036), "MB size")
+	testingutil.AssertEquals(t, "10.21 KB", utils.HumanByteSize(10*1024+220), "KB size")
+	testingutil.AssertEquals(t, "10240 Bytes", utils.HumanByteSize(10240), "Byte size")
 }
 
 func TestUtilsTimer(t *testing.T) {
@@ -34,10 +36,10 @@ func TestUtilsTimer(t *testing.T) {
 	timer2, err2 := utils.NewTimer(100, -1, func(isnt *utils.Timer, tim time.Time, delegate interface{}) {
 		fmt.Println("timer2 triggered ...")
 	}, nil)
-	AssertNil(t, err1, "utils.NewTimer")
-	AssertNotNil(t, timer1, "timer1")
-	AssertNil(t, err2, "utils.NewTimer")
-	AssertNotNil(t, timer2, "timer2")
+	testingutil.AssertNil(t, err1, "utils.NewTimer")
+	testingutil.AssertNotNil(t, timer1, "timer1")
+	testingutil.AssertNil(t, err2, "utils.NewTimer")
+	testingutil.AssertNotNil(t, timer2, "timer2")
 	to := time.NewTimer(time.Millisecond * 500)
 	select {
 	case <-to.C:
@@ -48,13 +50,21 @@ func TestUtilsTimer(t *testing.T) {
 
 func TestUtilsURLPathJoin(t *testing.T) {
 	url := utils.URLPathJoin("/demo", " ", "", "a/", "/b/", "/c/")
-	AssertEquals(t, "/demo/a/b/c/", url, "url")
+	testingutil.AssertEquals(t, "/demo/a/b/c/", url, "url")
 	url = utils.URLPathJoin("http://localhost/demo/", " ", "/", "a", "/b/", "c/")
-	AssertEquals(t, "http://localhost/demo/a/b/c/", url, "url")
+	testingutil.AssertEquals(t, "http://localhost/demo/a/b/c/", url, "url")
 }
 
 func TestUtilsConvertToString(t *testing.T) {
 	v0 := []byte("abc")
 	v1 := utils.ToString(v0)
-	AssertEquals(t, "abc", v1, "ToString")
+	testingutil.AssertEquals(t, "abc", v1, "ToString")
+}
+
+func TestHexStringToInteger(t *testing.T) {
+	val := "5c87d5c0b901858838a7d7b1"
+	v, err := strconv.ParseUint(val, 16, 64)
+	testingutil.AssertNotEquals(t, 0, v, "HexStringToInteger")
+	fmt.Printf("hex %s integer value is %d\n", val, v)
+	testingutil.AssertNotNil(t, err, "strconv.ParseUint")
 }

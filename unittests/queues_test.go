@@ -6,15 +6,16 @@ import (
 
 	"github.com/kevinyjn/gocom/definations"
 	"github.com/kevinyjn/gocom/queues"
+	"github.com/kevinyjn/gocom/testingutil"
 	"github.com/kevinyjn/gocom/utils"
 )
 
 func TestQueuesOperate(t *testing.T) {
 	err := testOrderedQueue()
-	AssertNil(t, err, "testOrderedQueue")
+	testingutil.AssertNil(t, err, "testOrderedQueue")
 	fmt.Println("Testing ordered queue finished")
 	err = testQueueOperatesInCoroutine()
-	AssertNil(t, err, "testQueueOperatesInCoroutine")
+	testingutil.AssertNil(t, err, "testQueueOperatesInCoroutine")
 	fmt.Println("Testing operates queue in coroutine finished")
 }
 
@@ -129,19 +130,19 @@ func TestQueuesFindElements(t *testing.T) {
 	results3 := queue1.FindElements(definations.NewComparisonObject().And(definations.CompareContains, "val", "345"))
 	results4 := queue1.FindElements(definations.NewComparisonObject().And(definations.CompareBetween, "val", []string{"3", "5"}))
 
-	AssertEquals(t, 3, len(results1), "results1.length")
-	AssertEquals(t, len(results1), len(results2), "results2.length")
-	AssertEquals(t, len(results1), len(results3), "results3.length")
-	AssertEquals(t, len(results1), len(results4), "results4.length")
+	testingutil.AssertEquals(t, 3, len(results1), "results1.length")
+	testingutil.AssertEquals(t, len(results1), len(results2), "results2.length")
+	testingutil.AssertEquals(t, len(results1), len(results3), "results3.length")
+	testingutil.AssertEquals(t, len(results1), len(results4), "results4.length")
 	for i, v := range results1 {
-		AssertEquals(t, v, results2[i], fmt.Sprintf("results2[%d]", i))
-		AssertEquals(t, v, results3[i], fmt.Sprintf("results3[%d]", i))
-		AssertEquals(t, v, results4[i], fmt.Sprintf("results4[%d]", i))
+		testingutil.AssertEquals(t, v, results2[i], fmt.Sprintf("results2[%d]", i))
+		testingutil.AssertEquals(t, v, results3[i], fmt.Sprintf("results3[%d]", i))
+		testingutil.AssertEquals(t, v, results4[i], fmt.Sprintf("results4[%d]", i))
 	}
 
 	results, n := queue1.PopMany(3)
-	AssertEquals(t, 3, n, "queue1.PopMany(3) length")
-	AssertEquals(t, 3, len(results), "queue1.PopMany(3) results length")
+	testingutil.AssertEquals(t, 3, n, "queue1.PopMany(3) length")
+	testingutil.AssertEquals(t, 3, len(results), "queue1.PopMany(3) results length")
 
 	fmt.Println("Testing queue find elements finished")
 }

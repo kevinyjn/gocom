@@ -1,0 +1,4 @@
+package microsvc
+
+// Constants
+const ()

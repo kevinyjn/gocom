@@ -46,3 +46,8 @@ func (r *ResultObject) Decode(s string) error {
 	err := json.Unmarshal([]byte(s), r)
 	return err
 }
+
+// StatusCode of result
+func (r *ResultObject) StatusCode() int {
+	return r.Code
+}

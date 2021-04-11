@@ -882,10 +882,14 @@ func generateMQResponseMessage(d *amqp.Delivery, exchangeName string) *mqenv.MQC
 		RoutingKey:    d.RoutingKey,
 		Timestamp:     d.Timestamp,
 		Body:          d.Body,
+		Headers:       map[string]string{},
 		BindData:      d,
 	}
 	if "" == msg.Exchange {
 		msg.Exchange = exchangeName
+	}
+	for k, v := range d.Headers {
+		msg.Headers[k] = utils.ToString(v)
 	}
 	return msg
 }

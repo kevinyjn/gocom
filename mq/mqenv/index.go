@@ -2,9 +2,6 @@ package mqenv
 
 import (
 	"time"
-
-	"github.com/kevinyjn/gocom/utils"
-	"github.com/streadway/amqp"
 )
 
 // Constants
@@ -43,20 +40,21 @@ type MQConnectorConfig struct {
 
 // MQConsumerMessage consumer message
 type MQConsumerMessage struct {
-	Driver        string      `json:"driver"`
-	Queue         string      `json:"queue"`
-	CorrelationID string      `json:"correlationId"`
-	ConsumerTag   string      `json:"consumerTag"`
-	ReplyTo       string      `json:"replyTo"`
-	MessageID     string      `json:"messageId"`
-	AppID         string      `json:"appId"`
-	UserID        string      `json:"userId"`
-	ContentType   string      `json:"contentType"`
-	Exchange      string      `json:"exchange"`
-	RoutingKey    string      `json:"routingKey"`
-	Timestamp     time.Time   `json:"-"`
-	Body          []byte      `json:"body"`
-	BindData      interface{} `json:"-"`
+	Driver        string            `json:"driver"`
+	Queue         string            `json:"queue"`
+	CorrelationID string            `json:"correlationId"`
+	ConsumerTag   string            `json:"consumerTag"`
+	ReplyTo       string            `json:"replyTo"`
+	MessageID     string            `json:"messageId"`
+	AppID         string            `json:"appId"`
+	UserID        string            `json:"userId"`
+	ContentType   string            `json:"contentType"`
+	Exchange      string            `json:"exchange"`
+	RoutingKey    string            `json:"routingKey"`
+	Timestamp     time.Time         `json:"-"`
+	Body          []byte            `json:"body"`
+	Headers       map[string]string `json:"headers"`
+	BindData      interface{}       `json:"-"`
 }
 
 // MQPublishMessage publish message
@@ -93,6 +91,22 @@ type MQConsumerProxy struct {
 	NoWait      bool
 }
 
+// GetHeader by key
+func (m *MQConsumerMessage) GetHeader(name string) string {
+	if nil == m.Headers {
+		return ""
+	}
+	return m.Headers[name]
+}
+
+// SetHeader value by key
+func (m *MQConsumerMessage) SetHeader(name string, value string) {
+	if nil == m.Headers {
+		m.Headers = map[string]string{}
+	}
+	m.Headers[name] = value
+}
+
 // OnClosed on close event
 func (m *MQPublishMessage) OnClosed() {
 	m.callbackDisabled = true
@@ -118,12 +132,9 @@ func NewMQResponseMessage(body []byte, cm *MQConsumerMessage) *MQPublishMessage 
 		pm.AppID = cm.MessageID
 		pm.UserID = cm.UserID
 		pm.ContentType = cm.ContentType
-		if nil != cm.BindData {
-			hdrs, ok := cm.BindData.(*amqp.Delivery)
-			if ok && nil != hdrs {
-				for k, v := range hdrs.Headers {
-					pm.Headers[k] = utils.ToString(v)
-				}
+		if nil != cm.Headers {
+			for k, v := range cm.Headers {
+				pm.Headers[k] = v
 			}
 		}
 	}
@@ -146,6 +157,7 @@ func NewConsumerMessageFromPublishMessage(pm *MQPublishMessage) MQConsumerMessag
 		RoutingKey:    pm.RoutingKey,
 		Timestamp:     time.Now(),
 		Body:          pm.Body,
+		Headers:       pm.Headers,
 		BindData:      nil,
 	}
 	return msg

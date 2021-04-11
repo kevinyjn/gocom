@@ -8,6 +8,19 @@ import (
 	"github.com/kevinyjn/gocom/validator/validates"
 )
 
+// ValidateElement validate information
+type ValidateElement struct {
+	Type    string
+	Content string
+}
+
+// Validate types
+const (
+	ValidateTypeRequired = "required"
+	ValidateTypeRegex    = "regex"
+	ValidateTypeObjectID = "objectId"
+)
+
 // Validate validator
 func Validate(v interface{}) error {
 	msgs := []string{}
@@ -25,23 +38,26 @@ func Validate(v interface{}) error {
 	for i := 0; i < value.NumField(); i++ {
 		f := value.Field(i)
 		ft := t.Field(i)
-		commentInfo := ft.Tag.Get("comment")
-		if commentInfo == "" {
-			commentInfo = ft.Name
+		labelInfo := ft.Tag.Get("label")
+		if "" == labelInfo {
+			labelInfo = ft.Tag.Get("comment")
+		}
+		if "" == labelInfo {
+			labelInfo = ft.Name
 		}
 		defaultInfo := ft.Tag.Get("default")
 		if "" != defaultInfo && (ft.Name[0] >= 'A' && ft.Name[0] <= 'Z') {
-			err = validates.ValidateDefault(f, defaultInfo, commentInfo)
+			err = validates.ValidateDefault(f, defaultInfo, labelInfo)
 			if nil != err {
 				msgs = append(msgs, err.Error())
 			}
 		}
 		validateInfo := ft.Tag.Get("validate")
-		if validateInfo == "" {
+		if "" == validateInfo {
 			continue
 		}
 
-		err = ValidateFieldValue(f, validateInfo, commentInfo)
+		err = ValidateFieldValue(f, validateInfo, labelInfo)
 		if nil != err {
 			msgs = append(msgs, err.Error())
 		}
@@ -75,22 +91,19 @@ func Validate(v interface{}) error {
 
 // ValidateFieldValue validator
 func ValidateFieldValue(f reflect.Value, validateInfo string, label string) error {
-	validateSlices := splitValidateContent(validateInfo, ',', 0)
+	validateElements := AnalyzeValidateElements(validateInfo)
 	msgs := []string{}
 	var err error
-	for _, validateElement := range validateSlices {
-		slices := splitValidateContent(validateElement, ':', 1)
-		validateType := strings.TrimSpace(slices[0])
+	for _, ele := range validateElements {
 		err = nil
-		switch validateType {
-		case "required":
+		switch ele.Type {
+		case ValidateTypeRequired:
 			err = validates.ValidateRequired(f, label)
 			break
-		case "regex":
-			regtext := slices[1]
-			err = validates.ValidateRegex(f, regtext, label)
+		case ValidateTypeRegex:
+			err = validates.ValidateRegex(f, ele.Content, label)
 			break
-		case "objectId":
+		case ValidateTypeObjectID:
 			err = validates.ValidateObjectID(f, label)
 			break
 		}
@@ -102,6 +115,26 @@ func ValidateFieldValue(f reflect.Value, validateInfo string, label string) erro
 		return errors.New(strings.Join(msgs, ";"))
 	}
 	return nil
+}
+
+// AnalyzeValidateElements validator
+func AnalyzeValidateElements(validateInfo string) []ValidateElement {
+	validateSlices := splitValidateContent(validateInfo, ',', 0)
+	elements := []ValidateElement{}
+	for _, validateElement := range validateSlices {
+		slices := splitValidateContent(validateElement, ':', 1)
+		validateType := strings.TrimSpace(slices[0])
+		ele := ValidateElement{
+			Type: validateType,
+		}
+		switch validateType {
+		case "regex":
+			ele.Content = slices[1]
+			break
+		}
+		elements = append(elements, ele)
+	}
+	return elements
 }
 
 func splitValidateContent(s string, sep byte, count int) []string {

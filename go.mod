@@ -39,6 +39,7 @@ require (
 	github.com/kataras/iris v11.1.1+incompatible
 	github.com/klauspost/compress v1.11.7 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/lenaten/hl7 v0.0.0-20181009090854-63c5c49a56d9
 	github.com/lib/pq v1.9.0
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-sqlite3 v1.14.6

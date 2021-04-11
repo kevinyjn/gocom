@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kevinyjn/gocom/testingutil"
 	"github.com/kevinyjn/gocom/validator"
 )
 
@@ -22,7 +23,7 @@ func TestValidateDefault(t *testing.T) {
 		requiredArray:  []string{"b"},
 	}
 	err := validator.Validate(tst)
-	AssertNil(t, err, "Validate result")
+	testingutil.AssertNil(t, err, "Validate result")
 	fmt.Printf("validate result:%+v\n", tst)
 }
 
