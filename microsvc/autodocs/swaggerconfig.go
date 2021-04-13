@@ -142,13 +142,14 @@ type XMLInfo struct {
 
 // PropertyInfo property information
 type PropertyInfo struct {
-	Type        string        `json:"type,omitempty"`
-	Format      string        `json:"format,omitempty"`
-	Description string        `json:"description,omitempty"`
-	Enum        []string      `json:"enum,omitempty"`
-	Reference   string        `json:"$ref,omitempty"`
-	Example     string        `json:"example,omitempty"`
-	Default     string        `json:"default,omitempty"`
-	XML         *XMLInfo      `json:"xml,omitempty"`
-	Items       *PropertyInfo `json:"items,omitempty"`
+	Type        string                  `json:"type,omitempty"`
+	Format      string                  `json:"format,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	Enum        []string                `json:"enum,omitempty"`
+	Reference   string                  `json:"$ref,omitempty"`
+	Example     string                  `json:"example,omitempty"`
+	Default     string                  `json:"default,omitempty"`
+	XML         *XMLInfo                `json:"xml,omitempty"`
+	Items       *PropertyInfo           `json:"items,omitempty"`
+	Properties  map[string]PropertyInfo `json:"properties,omitempty"`
 }

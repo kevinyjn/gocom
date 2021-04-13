@@ -12,11 +12,11 @@ import (
 
 // demoController processes with demo business
 type demoController struct {
-	microsvc.AbstractController `serialize:""`
-	SerializationStrategy       interface{} `serialization:"json"`
-	FiltersStrategy             string      `filters:"BlackUserFilter,AppFilter"`
-	Name                        string
-	observers                   []string
+	microsvc.AbstractController
+	SerializationStrategy interface{} `serialization:"json"`
+	FiltersStrategy       string      `filters:"BlackUserFilter,AppFilter"`
+	Name                  string
+	observers             []string
 }
 
 // HandleHello : hello event handle

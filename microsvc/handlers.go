@@ -182,6 +182,8 @@ func (h *mqHandler) Execute(msg mqenv.MQConsumerMessage) *mqenv.MQPublishMessage
 			}
 			resEv := delegate.Execute(ev)
 			if nil != resEv {
+				ev.SetStatus(resEv.GetStatus())
+				ev.SetDescription(resEv.GetDescription())
 				respMsg := events.CreatePublishMessageFromEventAndPayload(resEv, resEv.GetOriginBody())
 				resp = &respMsg
 			}
@@ -227,7 +229,7 @@ func (h *mqHandler) formatInputs(msg mqenv.MQConsumerMessage) ([]reflect.Value, 
 	return inParams, err
 }
 
-func (h *mqHandler) parseCallOutputs(msg mqenv.MQConsumerMessage, outParams []reflect.Value) (*mqenv.MQPublishMessage, error) {
+func (h *mqHandler) parseCallOutputs(msg mqenv.MQConsumerMessage, outParams []reflect.Value) (*mqenv.MQPublishMessage, HandlerError) {
 	numOut := len(h.outTypes)
 	var pubMsg *mqenv.MQPublishMessage
 	resObj := results.NewResultObjectWithRequestSn(msg.MessageID)
@@ -357,13 +359,14 @@ func (h *mqHandler) parseCallOutputs(msg mqenv.MQConsumerMessage, outParams []re
 			resObj.Code = errStatus.StatusCode()
 			resObj.Message = errStatus.Error()
 		} else if nil != err {
+			errStatus = NewHandlerError(results.InnerError, err.Error())
 			resObj.Code = results.InnerError
 			resObj.Message = err.Error()
 		}
 		logger.Error.Printf("handler %s formates response while got empty payload, responses code:%d and error message:%s", h.RoutingKey, resObj.Code, resObj.Message)
 		pubMsg.Body = []byte(resObj.Encode())
 	}
-	return pubMsg, err
+	return pubMsg, errStatus
 }
 
 func (h *mqHandler) postOnError(msg mqenv.MQConsumerMessage, status int, err error) *mqenv.MQPublishMessage {
@@ -453,20 +456,51 @@ func (h *mqHandler) GetResponsesDocsInfo() map[string]autodocs.SchemaInfo {
 	okResponse := autodocs.SchemaInfo{
 		Description: "成功响应",
 	}
+	rootResponseSchema := autodocs.DefinitionInfo{
+		Type: "object",
+		Properties: map[string]autodocs.PropertyInfo{
+			"code": {
+				Type:        "integer",
+				Description: "响应编码（0：成功，非0：失败）",
+			},
+			"message": {
+				Type:        "string",
+				Description: "响应结果描述信息",
+				Example:     "响应结果描述",
+			},
+		},
+	}
 	for _, ot := range h.outTypes {
 		if ot.isMQParameter {
 			continue
 		} else if ot.isErrorStatus || ot.isError {
 			continue
 		}
-		okResponse.Schema = &autodocs.DefinitionInfo{
-			Type:       "object",
-			Properties: autodocs.ParseResponseParameters(ot.valueType, ot.GetParameterFieldSerializingTagName()),
+		respSchema := autodocs.DefinitionInfo(rootResponseSchema)
+		respSchema.Properties["data"] = autodocs.PropertyInfo{
+			Type:        "object",
+			Description: "响应数据",
+			Properties:  autodocs.ParseResponseParameters(ot.valueType, ot.GetParameterFieldSerializingTagName()),
 		}
+		okResponse.Schema = &respSchema
 	}
-	responses[strconv.Itoa(results.OK)] = okResponse
-	responses["Not 0"] = autodocs.SchemaInfo{
-		Description: "失败",
+	responses["0"] = okResponse
+	responses["非0"] = autodocs.SchemaInfo{
+		Description: "失败响应",
+		Schema: &autodocs.DefinitionInfo{
+			Properties: map[string]autodocs.PropertyInfo{
+				"code": {
+					Type:        "integer",
+					Description: "失败编码",
+					Example:     strconv.Itoa(results.InvalidInput),
+				},
+				"message": {
+					Type:        "string",
+					Description: "失败原因",
+					Example:     "请填写合法参数",
+				},
+			},
+		},
 	}
 	return responses
 }
@@ -491,6 +525,9 @@ func (hm *mqHandlers) Execute(msg mqenv.MQConsumerMessage) *mqenv.MQPublishMessa
 		return hm.postOnError(msg, results.NotFound, fmt.Errorf("Handler by routingKey:%s not found", msg.RoutingKey))
 	}
 
+	if logger.IsDebugEnabled() {
+		logger.Debug.Printf("handling processor by routingKey:%s", msg.RoutingKey)
+	}
 	// pre execute
 	resp := h.PreExecute(msg)
 	if nil != resp {

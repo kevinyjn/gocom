@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/kevinyjn/gocom/config/results"
+	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/microsvc/autodocs"
 	"github.com/kevinyjn/gocom/microsvc/delegates"
 	"github.com/kevinyjn/gocom/microsvc/filters"
@@ -163,6 +164,7 @@ func (c *mqRegisterController) HandleAddVisitor(param registerVisitor) (*registe
 	}
 	visitor := visitors.NewStdMQVisitor(c.GetTopicCategory(), param.Topic, param.RoutingKey, param.MatchPattern)
 	controller.AttachVisitor(visitor)
+	logger.Info.Printf("controller %s registerd visitor %s on pattern:%s", controller.GetName(), visitor.GetName(), visitor.MatchPattern())
 	return &registerResult{param.Group}, nil
 }
 
@@ -173,6 +175,7 @@ func (c *mqRegisterController) HandleAddObserver(param registerObserver) (*regis
 	}
 	observer := observers.NewStdMQObserver(param.PayloadFrom, c.GetTopicCategory(), param.Topic, param.RoutingKey, param.MatchPattern)
 	controller.AttachObserver(observer)
+	logger.Info.Printf("controller %s registerd observer %s on pattern:%s", controller.GetName(), observer.GetName(), observer.MatchPattern())
 	return &registerResult{param.Group}, nil
 }
 
@@ -183,6 +186,7 @@ func (c *mqRegisterController) HandleAddDelegate(param registerDelegate) (*regis
 	}
 	delegate := delegates.NewStdMQDelegate(c.GetTopicCategory(), param.Topic, param.RoutingKey, param.MatchPattern)
 	controller.AttachDelegate(delegate)
+	logger.Info.Printf("controller %s registerd delegate %s on pattern:%s", controller.GetName(), delegate.GetName(), delegate.MatchPattern())
 	return &registerResult{param.Group}, nil
 }
 
@@ -212,24 +216,3 @@ func (c *mqRegisterController) HandleRemoveDelegate(param registerDelegate) (*re
 	controller.RemoveDelegate(param.Name)
 	return &registerResult{param.Group}, nil
 }
-
-// todo:
-/**
-1. 补充：
-* 1.2 delegates 串上流程，delegates 入参为MQConsumerMessage比较合理，注册为handler的委托者
-1.4 access log database model
-1.5 operation log database model
-* 2. 文档：
-* 2.1 考虑go-swagger的可行性
-* 2.2 由注册的controller handlers 生成接口清单
-*     api: routingKey
-* 	  topic: 值
-* 	  入参清单（字段，字段名称，字段类型，是否必填，限制条件，备注）
-* 	  响应清单（字段，字段名称，字段类型，是否必填，限制条件，备注）
-* 	  入参举例
-* 	  响应举例
-*     缺憾：暂时无法拿到handler中文注释名的办法
-3. 联调用例
-3.1 宿主用例：访问用例，visitor记录访问事件，发送注册的外部observer服务事件
-3.2 外部observer用例：向宿主用例注册observer事件，监听业务推送
-*/
