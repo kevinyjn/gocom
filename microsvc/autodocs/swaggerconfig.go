@@ -2,7 +2,8 @@ package autodocs
 
 // SwaggerConfig config of docs
 type SwaggerConfig struct {
-	Swagger             string                    `json:"swagger"`
+	Swagger             string                    `json:"swagger,omitempty"`
+	OpenAPI             string                    `json:"openapi,omitempty"`
 	Info                DocsInfo                  `json:"info"`
 	Host                string                    `json:"host"`
 	BasePath            string                    `json:"basePath"`
@@ -99,33 +100,6 @@ type SchemaInfo struct {
 	SerializationType string          `json:"serializationType,omitempty"`
 }
 
-// QuerySecurityAuthInfo struct
-type QuerySecurityAuthInfo struct {
-	APIKey       []string `json:"apiKey,omitempty"`
-	PrestoreAuth []string `json:"petstoreAuth,omitempty"`
-}
-
-// SecurityDefinitions security definition
-type SecurityDefinitions struct {
-	APIKey       APIKeyInfo        `json:"apiKey"`
-	PrestoreAuth *PrestoreAuthInfo `json:"petstoreAuth,omitempty"`
-}
-
-// APIKeyInfo struct
-type APIKeyInfo struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-	In   string `json:"in"`
-}
-
-// PrestoreAuthInfo struct
-type PrestoreAuthInfo struct {
-	Type             string            `json:"type"`
-	AuthorizationUrl string            `json:"authorizationUrl"`
-	Flow             string            `json:"flow"`
-	Scopes           map[string]string `json:"scopes,omitempty"`
-}
-
 // DefinitionInfo model definition information
 type DefinitionInfo struct {
 	Type       string                  `json:"type,omitempty"`
@@ -152,4 +126,41 @@ type PropertyInfo struct {
 	XML         *XMLInfo                `json:"xml,omitempty"`
 	Items       *PropertyInfo           `json:"items,omitempty"`
 	Properties  map[string]PropertyInfo `json:"properties,omitempty"`
+}
+
+// QuerySecurityAuthInfo struct
+type QuerySecurityAuthInfo struct {
+	APIKey       []string `json:"jwt,omitempty"`
+	PrestoreAuth []string `json:"petstoreAuth,omitempty"`
+}
+
+// SecurityDefinitions security definition
+type SecurityDefinitions struct {
+	APIKey       *APIKeyInfo       `json:"jwt,omitempty"`
+	BasicAuth    *APIKeyInfo       `json:"basicAuth,omitempty"`
+	PrestoreAuth *PrestoreAuthInfo `json:"petstoreAuth,omitempty"`
+}
+
+// APIKeyInfo struct
+type APIKeyInfo struct {
+	Type string `json:"type"`
+	Name string `json:"name,omitempty"`
+	In   string `json:"in,omitempty"`
+}
+
+// PrestoreAuthInfo struct
+type PrestoreAuthInfo struct {
+	Type             string            `json:"type"`
+	AuthorizationUrl string            `json:"authorizationUrl"`
+	Flow             string            `json:"flow"`
+	Scopes           map[string]string `json:"scopes,omitempty"`
+}
+
+// BearerAuthInfo struct
+type BearerAuthInfo struct {
+	Type         string `json:"type"`
+	Name         string `json:"name"`
+	In           string `json:"in"`
+	Scheme       string `json:"scheme"`
+	BearerFormat string `json:"bearerFormat,omitempty"`
 }

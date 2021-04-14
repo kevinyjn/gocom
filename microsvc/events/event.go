@@ -376,7 +376,9 @@ func (ev *standardQueryEvent) loadFromConsumerMessage(msg mqenv.MQConsumerMessag
 	headers := map[string]string{}
 	if nil != msg.Headers {
 		for k, v := range msg.Headers {
-			headers[strings.ToLower(k)] = v
+			k = strings.ToLower(k)
+			ev.SetHeader(k, v)
+			headers[k] = v
 		}
 	}
 

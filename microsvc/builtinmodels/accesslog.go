@@ -89,10 +89,10 @@ func (m *AccessLog) LoadFromEvent(event events.Event) {
 	m.Message = event.GetDescription()
 	headers := event.GetHeaders()
 	if nil != headers {
-		m.Agent = headers["Agent"]
-		m.RemoteIP = headers["RemoteIP"]
-		m.DeviceID = headers["DeviceId"]
-		m.Markup = headers["Markup"]
+		m.Agent = headers["agent"]
+		m.RemoteIP = headers["remoteip"]
+		m.DeviceID = headers["deviceid"]
+		m.Markup = headers["markup"]
 	}
 }
 

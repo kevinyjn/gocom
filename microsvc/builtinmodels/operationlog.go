@@ -88,9 +88,9 @@ func (m *OperationLog) LoadFromEvent(event events.Event) {
 	m.Message = event.GetDescription()
 	headers := event.GetHeaders()
 	if nil != headers {
-		m.Agent = headers["Agent"]
-		m.RemoteIP = headers["RemoteIP"]
-		m.DeviceID = headers["DeviceId"]
+		m.Agent = headers["agent"]
+		m.RemoteIP = headers["remoteip"]
+		m.DeviceID = headers["deviceid"]
 	}
 }
 

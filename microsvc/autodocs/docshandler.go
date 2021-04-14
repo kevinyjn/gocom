@@ -1,6 +1,7 @@
 package autodocs
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/kataras/iris"
 	"github.com/kevinyjn/gocom/config"
@@ -30,9 +32,21 @@ var (
 	DocumentVersion     = "0.0.1"
 	APIBaseURI          = "/api/"
 	OAuthURL            = ""
+	UserVerifyManager   LoginVerifier
 
 	_controllerGroupDescriptions   = map[string]string{}
 	_controllerHandlerDescriptions = map[string]string{}
+
+	_builtinUsers = builtinUsersWrapper{
+		users: map[string]LoginUser{
+			"docsuser": &builtinUser{
+				Name:           "docsuser",
+				UserID:         "-19900001",
+				AppID:          "-1990",
+				passwordOrHash: "000000",
+			},
+		},
+	}
 
 	_docsHandlerLoaded                 = false
 	_handlersManager   HandlersManager = nil
@@ -91,6 +105,69 @@ func SetControllerHandlerDescription(controllerName string, handlerName string, 
 	_controllerHandlerDescriptions[controllerName+"."+handlerName] = description
 }
 
+// LoginUser interface of login user information
+type LoginUser interface {
+	GetUserID() string
+	GetAppID() string
+	GetName() string
+	VerifyPassword(passwordOrHash string) bool
+}
+
+// LoginVerifier interface of login user validator
+type LoginVerifier interface {
+	VerifyUser(userName string, passwordOrHash string) (LoginUser, error)
+}
+
+// builtinUser
+type builtinUser struct {
+	UserID         string `json:"uid"`
+	Name           string `json:"name"`
+	AppID          string `json:"appId"`
+	passwordOrHash string `json:"-"`
+}
+
+type builtinUsersWrapper struct {
+	users map[string]LoginUser
+	mu    sync.RWMutex
+}
+
+// VerifyUser if user exists or password matches
+func (buw *builtinUsersWrapper) VerifyUser(userName string, passwordOrHash string) (LoginUser, error) {
+	buw.mu.RLock()
+	defer buw.mu.RUnlock()
+	if nil == buw.users {
+		return nil, fmt.Errorf("User name does not exists")
+	}
+	u, _ := buw.users[userName]
+	if nil == u {
+		return nil, fmt.Errorf("User name does not exists")
+	}
+	if false == u.VerifyPassword(passwordOrHash) {
+		return nil, fmt.Errorf("User password were not correct")
+	}
+	return u, nil
+}
+
+// GetUserID user id
+func (bu *builtinUser) GetUserID() string {
+	return bu.UserID
+}
+
+// GetAppID app id
+func (bu *builtinUser) GetAppID() string {
+	return bu.AppID
+}
+
+// GetName name of user
+func (bu *builtinUser) GetName() string {
+	return bu.Name
+}
+
+// VerifyPassword if password matches
+func (bu *builtinUser) VerifyPassword(passwordOrHash string) bool {
+	return passwordOrHash == bu.passwordOrHash
+}
+
 // getSwaggerPath : find valid swagger static file path
 func getSwaggerPath() string {
 	checkPaths := []string{"../swagger", "./swagger"}
@@ -133,14 +210,19 @@ func handlerRedirectToDocsPage(ctx iris.Context) {
 func getAPISecurityInfo() (SecurityDefinitions, []interface{}) {
 	secNames := []interface{}{}
 	sec := SecurityDefinitions{
-		APIKey: APIKeyInfo{
+		APIKey: &APIKeyInfo{
 			Type: "apiKey",
-			Name: "X-API-Key",
+			Name: "Authorization",
 			In:   "header",
+		},
+		BasicAuth: &APIKeyInfo{
+			Type: "basic",
+			Name: "Authorization",
 		},
 	}
 	secNames = append(secNames, map[string][]string{
-		"apiKey": {},
+		"jwt":       {},
+		"basicAuth": {},
 	})
 	if "" != OAuthURL {
 		sec.PrestoreAuth = &PrestoreAuthInfo{
@@ -159,6 +241,7 @@ func getAPISecurityInfo() (SecurityDefinitions, []interface{}) {
 func handlerGetSwaggerConfig(ctx iris.Context) {
 	configs := SwaggerConfig{
 		Swagger: "2.0",
+		// OpenAPI: "3.0.0",
 		Info: DocsInfo{
 			Title:       DocumentTitle,
 			Description: DocumentDescription,
@@ -169,6 +252,9 @@ func handlerGetSwaggerConfig(ctx iris.Context) {
 		Tags:     []TagInfo{},
 		Schemes:  []string{"https", "http"},
 		Paths:    map[string]PathInfo{},
+	}
+	if "http" == ctx.Request().URL.Scheme || strings.HasPrefix(ctx.Request().Referer(), "http:") {
+		configs.Schemes = []string{"http", "https"}
 	}
 	secs, secNames := getAPISecurityInfo()
 	configs.SecurityDefinitions = secs
@@ -208,13 +294,21 @@ func handlerGetSwaggerConfig(ctx iris.Context) {
 			}
 		}
 
+		leftsTags := []TagInfo{}
 		for k, v := range controllerGroupDescriptions {
-			configs.Tags = append(configs.Tags, TagInfo{
+			tag := TagInfo{
 				Name:        k,
 				Description: v,
-			})
+			}
+			if "mq-register" == tag.Name {
+				leftsTags = append(leftsTags)
+			} else {
+				configs.Tags = append(configs.Tags, tag)
+			}
 		}
-		// todo
+		for _, tag := range leftsTags {
+			configs.Tags = append(configs.Tags, tag)
+		}
 	}
 
 	body, err := json.Marshal(configs)
@@ -226,6 +320,55 @@ func handlerGetSwaggerConfig(ctx iris.Context) {
 	}
 	ctx.Header("Content-Type", "application/json")
 	ctx.WriteString(string(body))
+}
+
+func parseRequestAuthorization(ctx iris.Context) (LoginUser, error) {
+	var u LoginUser
+	var err error
+	authToken := ctx.GetHeader("Authorization")
+	if "" == authToken {
+		authToken = ctx.GetHeader("authorization")
+	}
+	remoteIP := utils.GetRemoteAddress(ctx.Request())
+	for {
+		if "" == authToken {
+			err = fmt.Errorf("No user has logged in")
+			break
+		}
+		authSlices := strings.SplitN(authToken, " ", 2)
+		if len(authSlices) < 2 {
+			err = fmt.Errorf("Un recognized token")
+			break
+		}
+		switch authSlices[0] {
+		case "Basic":
+			basicToken, e := base64.StdEncoding.DecodeString(authSlices[1])
+			if nil != e {
+				err = e
+			}
+			loginTokens := strings.SplitN(string(basicToken), ":", 2)
+			passPart := ""
+			if len(loginTokens) > 1 {
+				passPart = loginTokens[1]
+			}
+			if nil != UserVerifyManager {
+				u, err = UserVerifyManager.VerifyUser(loginTokens[0], passPart)
+			}
+			if nil == u && ("127.0.0.1" == remoteIP || "::1" == remoteIP) {
+				u, err = _builtinUsers.VerifyUser(loginTokens[0], passPart)
+			}
+			break
+		case "Bearer":
+			// jwt token
+			break
+		}
+
+		if nil == u && nil == err {
+			err = fmt.Errorf("Verify user login failed")
+		}
+		break
+	}
+	return u, err
 }
 
 // handlerTryoutAPICase : 测试API支持用例
@@ -265,6 +408,11 @@ func handlerTryoutAPICase(ctx iris.Context) {
 			CorrelationID: id,
 			ReplyTo:       "rpc-" + id,
 			Body:          body,
+		}
+		loginUser, _ := parseRequestAuthorization(ctx)
+		if nil != loginUser {
+			msg.AppID = loginUser.GetAppID()
+			msg.UserID = loginUser.GetUserID()
 		}
 
 		pubMsg := handler.Execute(msg)
