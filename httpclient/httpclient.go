@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
@@ -14,6 +15,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kevinyjn/gocom/definations"
@@ -45,6 +47,15 @@ type ClientOption interface {
 type funcHTTPClientOption struct {
 	f func(*httpClientOption)
 }
+
+type transportPoolManager struct {
+	pool map[string]*http.Transport
+	mu   sync.RWMutex
+}
+
+var (
+	transPool = transportPoolManager{pool: map[string]*http.Transport{}}
+)
 
 func (fdo *funcHTTPClientOption) apply(do *httpClientOption) {
 	fdo.f(do)
@@ -311,51 +322,11 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 		}
 	}
 
-	tlsConfig := &tls.Config{InsecureSkipVerify: true}
-	if opts.tlsOptions != nil && opts.tlsOptions.Enabled {
-		if "" != opts.tlsOptions.CertFile || "" != opts.tlsOptions.KeyFile {
-			certs, err := tls.LoadX509KeyPair(opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile)
-			if err != nil {
-				logger.Error.Printf("Load tls certificates:%s and %s failed with error:%v", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile, err)
-				return nil, err
-			}
-			tlsConfig.Certificates = []tls.Certificate{certs}
-		}
-
-		// ca, err := x509.ParseCertificate(certs.Certificate[0])
-		// if err != nil {
-		// 	logger.Error.Printf("Parse certificate faield with error:%v", err)
-		// } else {
-		// 	caPool.AddCert(ca)
-		// }
-
-		if opts.tlsOptions.CaFile != "" {
-			caData, err := ioutil.ReadFile(opts.tlsOptions.CaFile)
-			if err != nil {
-				logger.Error.Printf("Load tls root CA:%s failed with error:%v", opts.tlsOptions.CaFile, err)
-				return nil, err
-			}
-			caPool := x509.NewCertPool()
-			caPool.AppendCertsFromPEM(caData)
-			tlsConfig.RootCAs = caPool
-		}
-		// tlsConfig.BuildNameToCertificate()
-		tlsConfig.InsecureSkipVerify = opts.tlsOptions.SkipVerify
-		// tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
-
-		// DEBUG for tls ca verify
-		// tlsConfig.ServerName = "10.248.100.227"
-		// req.Host = "10.248.100.227"
-		// logger.Info.Printf("loaded tls certificates:%s and %s", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile)
+	tr, err := transPool.get(&opts)
+	if nil != err {
+		return nil, err
 	}
-	tr := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-	if opts.proxies != nil && opts.proxies.Valid() {
-		proxyURL, _ := url.Parse(opts.proxies.FetchProxyURL(queryURL))
-		tr.Proxy = http.ProxyURL(proxyURL)
-	}
-	client := &http.Client{Transport: tr}
+	client := http.Client{Transport: tr}
 	if opts.timeouts > 0 {
 		client.Timeout = opts.timeouts
 	}
@@ -370,7 +341,11 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody := make([]byte, resp.ContentLength)
+	r := bufio.NewReader(resp.Body)
+	_, err = r.Read(respBody)
+	r = nil
+	// respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error.Printf("Read result by queried url:%s failed with error:%v", queryURL, err)
 		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
@@ -515,4 +490,78 @@ func (r *requestEntity) OrderingValue() int64 {
 }
 func (r *requestEntity) DebugString() string {
 	return r.url
+}
+
+func (p *transportPoolManager) get(opts *httpClientOption) (*http.Transport, error) {
+	key := "tr-inst"
+	if opts.tlsOptions != nil && opts.tlsOptions.Enabled {
+		if "" != opts.tlsOptions.CertFile || "" != opts.tlsOptions.KeyFile {
+			key = strings.Join([]string{key, opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile}, "-")
+		}
+		if opts.tlsOptions.CaFile != "" {
+			key = strings.Join([]string{key, opts.tlsOptions.CaFile}, "-")
+		}
+	}
+	if opts.proxies != nil && opts.proxies.Valid() {
+		key = key + "-" + opts.proxies.GetProxyURL()
+	}
+	p.mu.RLock()
+	tr, _ := p.pool[key]
+	p.mu.RUnlock()
+	if nil == tr {
+		return p.set(key, opts)
+	}
+	return tr, nil
+}
+
+func (p *transportPoolManager) set(key string, opts *httpClientOption) (*http.Transport, error) {
+	tlsConfig := tls.Config{InsecureSkipVerify: true}
+	if opts.tlsOptions != nil && opts.tlsOptions.Enabled {
+		if "" != opts.tlsOptions.CertFile || "" != opts.tlsOptions.KeyFile {
+			certs, err := tls.LoadX509KeyPair(opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile)
+			if err != nil {
+				logger.Error.Printf("Load tls certificates:%s and %s failed with error:%v", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile, err)
+				return nil, err
+			}
+			tlsConfig.Certificates = []tls.Certificate{certs}
+		}
+
+		// ca, err := x509.ParseCertificate(certs.Certificate[0])
+		// if err != nil {
+		// 	logger.Error.Printf("Parse certificate faield with error:%v", err)
+		// } else {
+		// 	caPool.AddCert(ca)
+		// }
+
+		if opts.tlsOptions.CaFile != "" {
+			key = strings.Join([]string{key, opts.tlsOptions.CaFile}, "-")
+			caData, err := ioutil.ReadFile(opts.tlsOptions.CaFile)
+			if err != nil {
+				logger.Error.Printf("Load tls root CA:%s failed with error:%v", opts.tlsOptions.CaFile, err)
+				return nil, err
+			}
+			tlsConfig.RootCAs = x509.NewCertPool()
+			tlsConfig.RootCAs.AppendCertsFromPEM(caData)
+		}
+		// tlsConfig.BuildNameToCertificate()
+		tlsConfig.InsecureSkipVerify = opts.tlsOptions.SkipVerify
+		// tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
+
+		// DEBUG for tls ca verify
+		// tlsConfig.ServerName = "10.248.100.227"
+		// req.Host = "10.248.100.227"
+		// logger.Info.Printf("loaded tls certificates:%s and %s", opts.tlsOptions.CertFile, opts.tlsOptions.KeyFile)
+	}
+	tr := &http.Transport{
+		TLSClientConfig: &tlsConfig,
+	}
+	if opts.proxies != nil && opts.proxies.Valid() {
+		proxyURL, _ := url.Parse(opts.proxies.GetProxyURL())
+		tr.Proxy = http.ProxyURL(proxyURL)
+	}
+
+	p.mu.Lock()
+	p.pool[key] = tr
+	p.mu.Unlock()
+	return tr, nil
 }

@@ -25,6 +25,14 @@ func (n *Proxies) Valid() bool {
 	return n.HTTP != "" || n.HTTPS != ""
 }
 
+// GetProxyURL fetch proxy url by any configured http or https
+func (n *Proxies) GetProxyURL() string {
+	if "" == n.HTTP {
+		return n.HTTPS
+	}
+	return n.HTTP
+}
+
 // FetchProxyURL fetch proxy url
 func (n *Proxies) FetchProxyURL(endpointURL string) string {
 	if strings.HasPrefix(endpointURL, "https") {
