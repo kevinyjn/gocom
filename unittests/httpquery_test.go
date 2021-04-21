@@ -20,7 +20,7 @@ func TestHTTPQueryWithRetry(t *testing.T) {
 }
 
 func TestHTTPQueryKubernetesAPI(t *testing.T) {
-	url := "https://127.0.0.1:6443"
+	url := "https://10.10.2.217:6443"
 	api := "/api/v1/namespaces/dev/pods/a113-0.0.8-68f9fddff-gp9lb-noexists"
 	caFile := "./tests/kubeapi/ca.crt"
 	tokenFile := "./tests/kubeapi/token"

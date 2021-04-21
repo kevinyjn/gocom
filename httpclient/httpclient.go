@@ -341,11 +341,14 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	}
 	defer resp.Body.Close()
 
-	respBody := make([]byte, resp.ContentLength)
-	r := bufio.NewReader(resp.Body)
-	_, err = r.Read(respBody)
-	r = nil
-	// respBody, err := ioutil.ReadAll(resp.Body)
+	var respBody []byte
+	if resp.ContentLength > 0 && resp.ContentLength < 0xffffffff {
+		respBody = make([]byte, resp.ContentLength)
+		r := bufio.NewReader(resp.Body)
+		_, err = r.Read(respBody)
+	} else {
+		respBody, err = ioutil.ReadAll(resp.Body)
+	}
 	if err != nil {
 		logger.Error.Printf("Read result by queried url:%s failed with error:%v", queryURL, err)
 		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
