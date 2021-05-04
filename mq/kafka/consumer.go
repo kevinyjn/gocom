@@ -20,7 +20,8 @@ type Consumer struct {
 	Base
 	Readers map[string]*k.Reader // 每一个topic 一个reader
 	// Params     map[string]string    // 配置参数
-	running    map[string]bool  // 用于设置reader 是否要关闭连接
+	running    map[string]bool // 用于设置reader 是否要关闭连接
+	cancels    map[string]context.CancelFunc
 	Brokers    []string         // kafka 的节点
 	OffsetDict map[string]int64 // 记录偏移量，避免在连接断开重连时候重复处理信息
 }
@@ -38,7 +39,10 @@ func (c *Consumer) ConfigMaxPollIntervalMS(interval int) {
 // StopConsumer 停止消费.
 func (c *Consumer) StopConsumer() {
 	for k := range c.running {
+		logger.Info.Printf("stop consumer %s", k)
 		c.running[k] = false
+		cancel := c.cancels[k]
+		cancel()
 	}
 }
 
@@ -100,7 +104,9 @@ func (c *Consumer) Receive(topic string, callback CallBack) error {
 	go func() {
 		defer reader.Close()
 		for c.running[topic] {
-			m, err := reader.ReadMessage(context.Background())
+			ctx, cancel := context.WithCancel(context.Background())
+			c.cancels[topic] = cancel
+			m, err := reader.ReadMessage(ctx)
 			if err != nil {
 				logger.Error.Println(err)
 			}
@@ -132,6 +138,7 @@ func NewConsumer(hosts string, groupID string) *Consumer {
 	c.Readers = make(map[string]*k.Reader)
 	// c.Params = make(map[string]string)
 	c.running = make(map[string]bool)
+	c.cancels = make(map[string]context.CancelFunc)
 	c.OffsetDict = make(map[string]int64)
 	c.ConfigGroupID(groupID)
 	c.Brokers = strings.Split(hosts, ",")

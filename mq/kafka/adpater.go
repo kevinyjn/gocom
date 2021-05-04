@@ -107,6 +107,17 @@ func GetKafka(mqConnName string) (*KafkaWorker, error) {
 	return nil, fmt.Errorf("Kafka instance by %s not found", mqConnName)
 }
 
+// 停止kafka
+func StopKafka(mqConnName string) error {
+	instance, ok := kafkaInstances[mqConnName]
+	if ok {
+		instance.Consumer.StopConsumer()
+		delete(kafkaInstances, mqConnName)
+	}
+	return fmt.Errorf("Kafka instance by %s not found", mqConnName)
+
+}
+
 // ConvertKafkaPacketToMQConsumerMessage 把接收到的kafkaPacket 数据转换成MQConsumerMessage.
 func ConvertKafkaPacketToMQConsumerMessage(packet *KafkaPacket) mqenv.MQConsumerMessage {
 	consumerMessage := mqenv.MQConsumerMessage{
