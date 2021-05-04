@@ -12,17 +12,15 @@ require (
 	github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible // indirect
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
-	github.com/chris-ramon/douceur v0.2.0 // indirect
 	github.com/denisenkom/go-mssqldb v0.10.0
 	github.com/eknkc/amber v0.0.0-20171010120322-cdade1c07385 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/flosch/pongo2 v0.0.0-20200913210552-0d938eb266f3 // indirect
 	github.com/fluent/fluent-logger-golang v1.5.0
-	github.com/frankban/quicktest v1.11.3 // indirect
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424 // indirect
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/godror/godror v0.24.4
+	github.com/godror/godror v0.24.6
 	github.com/golang/protobuf v1.5.2
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20210202160940-bed99a852dfe // indirect
@@ -49,7 +47,6 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.15.0 // indirect
 	github.com/onsi/gomega v1.10.5 // indirect
-	github.com/pierrec/lz4 v2.6.0+incompatible // indirect
 	github.com/robfig/cron v1.2.0
 	github.com/ryanuber/columnize v2.1.2+incompatible // indirect
 	github.com/segmentio/kafka-go v0.4.14
@@ -78,7 +75,6 @@ require (
 	golang.org/x/sys v0.0.0-20210420205809-ac73e9fd8988 // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
 	golang.org/x/text v0.3.6
-	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
 	google.golang.org/protobuf v1.26.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v2 v2.4.0
