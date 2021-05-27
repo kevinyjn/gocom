@@ -171,7 +171,7 @@ func (o *DBConnectionPoolOptions) parseCommonDSN(dsn string) error {
 	case "tidb":
 		o.Engine = EngineTiDB
 		o.Port = 4000
-	case "cockroach":
+	case "cockroach", "cockroachdb":
 		o.Engine = EngineCockroachDB
 		o.Port = 26257
 		break
