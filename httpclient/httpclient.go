@@ -1,7 +1,6 @@
 package httpclient
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
@@ -54,7 +53,12 @@ type transportPoolManager struct {
 }
 
 var (
-	transPool = transportPoolManager{pool: map[string]*http.Transport{}}
+	transPool  = transportPoolManager{pool: map[string]*http.Transport{}}
+	bufferPool = sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(make([]byte, 4096))
+		},
+	}
 )
 
 func (fdo *funcHTTPClientOption) apply(do *httpClientOption) {
@@ -341,20 +345,24 @@ func HTTPQuery(method string, queryURL string, body io.Reader, options ...Client
 	}
 	defer resp.Body.Close()
 
-	var respBody []byte
-	if resp.ContentLength > 0 && resp.ContentLength < 0xffffffff {
-		respBody = make([]byte, resp.ContentLength)
-		r := bufio.NewReader(resp.Body)
-		_, err = r.Read(respBody)
-	} else {
-		respBody, err = ioutil.ReadAll(resp.Body)
-	}
-	if err != nil {
+	buff := bufferPool.Get().(*bytes.Buffer)
+	buff.Reset()
+	_, err = io.Copy(buff, resp.Body)
+	if nil != err {
+		bufferPool.Put(buff)
+		buff = nil
 		logger.Error.Printf("Read result by queried url:%s failed with error:%v", queryURL, err)
 		bodyBuffer := getQueryBodyBuffer(queryURL, req.Body)
 		afterQueryFailed(resp.StatusCode, err, []byte(err.Error()), method, queryURL, bodyBuffer, &opts, logger.Error)
 		return nil, err
 	}
+	// var respBody []byte
+	respBody := make([]byte, buff.Len())
+	copy(respBody, buff.Bytes())
+	buff.Reset()
+	bufferPool.Put(buff)
+	buff = nil
+	resp.Body = nil // force release the body so that the conn.rawInput should release the buffer grow memory leaks
 
 	if resp.StatusCode != 200 {
 		if nil != opts.successStatus && opts.successStatus[resp.StatusCode] {
@@ -384,10 +392,17 @@ func getQueryBodyBuffer(url string, body io.Reader) []byte {
 	var result []byte
 	if nil != body {
 		var err error
-		result, err = ioutil.ReadAll(body)
+		buff := bufferPool.Get().(*bytes.Buffer)
+		buff.Reset()
+		_, err = io.Copy(buff, body)
 		if nil != err {
 			logger.Error.Output(2, fmt.Sprintf("query %s failed and read request body failed with error:%v", url, err))
+		} else {
+			result = make([]byte, buff.Len())
+			copy(result, buff.Bytes())
 		}
+		buff.Reset()
+		bufferPool.Put(buff)
 	}
 	return result
 }
@@ -537,7 +552,6 @@ func (p *transportPoolManager) set(key string, opts *httpClientOption) (*http.Tr
 		// }
 
 		if opts.tlsOptions.CaFile != "" {
-			key = strings.Join([]string{key, opts.tlsOptions.CaFile}, "-")
 			caData, err := ioutil.ReadFile(opts.tlsOptions.CaFile)
 			if err != nil {
 				logger.Error.Printf("Load tls root CA:%s failed with error:%v", opts.tlsOptions.CaFile, err)
@@ -564,6 +578,9 @@ func (p *transportPoolManager) set(key string, opts *httpClientOption) (*http.Tr
 	}
 
 	p.mu.Lock()
+	if logger.IsDebugEnabled() {
+		logger.Debug.Printf("put http transport by key %s", key)
+	}
 	p.pool[key] = tr
 	p.mu.Unlock()
 	return tr, nil
