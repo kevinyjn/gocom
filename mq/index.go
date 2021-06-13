@@ -145,6 +145,11 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 	return nil
 }
 
+// HasConnections returns true if has any mq connection
+func HasConnections() bool {
+	return len(mqConnConfigs) > 0
+}
+
 // GetAllMQDriverConfigs configs
 func GetAllMQDriverConfigs() map[string]mqenv.MQConnectorConfig {
 	result := map[string]mqenv.MQConnectorConfig{}

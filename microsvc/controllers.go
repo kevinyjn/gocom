@@ -13,8 +13,8 @@ import (
 	"github.com/kevinyjn/gocom/microsvc/visitors"
 )
 
-// MQController interface
-type MQController interface {
+// Controller interface
+type Controller interface {
 	filters.FilterOperator
 	visitors.VisitorOperator
 	observers.ObserverOperator
@@ -23,6 +23,9 @@ type MQController interface {
 	SetName(name string)
 	GetTopicCategory() string
 	SetTopicCategory(topicCategory string)
+	IsDisablesAuthorization() bool
+	HasConsumedMQ() bool
+	SetConsumedMQ(consumed bool)
 	afterAnalyzedHandlers([]string)
 }
 
@@ -34,6 +37,7 @@ type AbstractController struct {
 	delegates.DelegatesChain
 	name          string
 	topicCategory string
+	hasConsumedMQ bool
 }
 
 // GetName controller name
@@ -56,6 +60,21 @@ func (c *AbstractController) SetTopicCategory(topicCategory string) {
 	c.topicCategory = topicCategory
 }
 
+// IsDisablesAuthorization boolean
+func (c *AbstractController) IsDisablesAuthorization() bool {
+	return false
+}
+
+// HasConsumedMQ boolean
+func (c *AbstractController) HasConsumedMQ() bool {
+	return c.hasConsumedMQ
+}
+
+// SetConsumedMQ boolean
+func (c *AbstractController) SetConsumedMQ(consumed bool) {
+	c.hasConsumedMQ = consumed
+}
+
 func (c *AbstractController) afterAnalyzedHandlers(handlerNames []string) {
 	if nil != handlerNames {
 		c.VisitorsChain.LoadStrategies(handlerNames)
@@ -65,38 +84,39 @@ func (c *AbstractController) afterAnalyzedHandlers(handlerNames []string) {
 }
 
 // GetController by controller name
-func GetController(name string) MQController {
+func GetController(name string) Controller {
 	return _controllerManager.get(name)
 }
 
 // SetController by controller name and controller instance
-func SetController(name string, controller MQController) {
+func SetController(name string, controller Controller) {
 	_controllerManager.set(name, controller)
 }
 
 // mqRegisterController for registering mq outside system middlewares
 type mqRegisterController struct {
 	AbstractController
+	SerializationStrategy interface{} `serialization:"json"`
 }
 
 type controllersManager struct {
-	controllers map[string]MQController
+	controllers map[string]Controller
 	mu          sync.RWMutex
 }
 
 var (
-	_mqRegisterController MQController
-	_controllerManager    = controllersManager{controllers: map[string]MQController{}, mu: sync.RWMutex{}}
+	_mqRegisterController Controller
+	_controllerManager    = controllersManager{controllers: map[string]Controller{}, mu: sync.RWMutex{}}
 )
 
-func (cm *controllersManager) get(name string) MQController {
+func (cm *controllersManager) get(name string) Controller {
 	cm.mu.RLock()
 	controller, _ := cm.controllers[name]
 	cm.mu.RUnlock()
 	return controller
 }
 
-func (cm *controllersManager) set(name string, controller MQController) {
+func (cm *controllersManager) set(name string, controller Controller) {
 	if cm.get(name) != nil {
 		return
 	}
@@ -133,7 +153,7 @@ type registerDelegate struct {
 }
 
 // InitMQRegisterController for mq register
-func InitMQRegisterController(topicCategory string) MQController {
+func InitMQRegisterController(topicCategory string) Controller {
 	if nil == _mqRegisterController {
 		_mqRegisterController = &mqRegisterController{}
 		LoadController(topicCategory, _mqRegisterController)
@@ -149,7 +169,7 @@ func InitMQRegisterController(topicCategory string) MQController {
 	return _mqRegisterController
 }
 
-func getControllerForRegister(controllerName string) (MQController, HandlerError) {
+func getControllerForRegister(controllerName string) (Controller, HandlerError) {
 	controller := GetController(controllerName)
 	if nil == controller {
 		return nil, NewHandlerError(results.NotFound, fmt.Sprintf("Controller by %s not found", controllerName))

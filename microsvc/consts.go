@@ -1,4 +1,6 @@
 package microsvc
 
 // Constants
-const ()
+const (
+	APIBaseURI = "/api/"
+)

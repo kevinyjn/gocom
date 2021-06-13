@@ -730,6 +730,28 @@ func KebabCaseString(s string) string {
 	return strings.ToLower(string(data[:]))
 }
 
+// CamelCaseSlices splits XxYy into ["Xx", "Yy"]
+func CamelCaseSlices(s string) []string {
+	num := len(s)
+	results := []string{}
+	j := 0
+	jj := false
+	for i := 0; i < num; i++ {
+		d := s[i]
+		if i > 0 && d >= 'A' && d <= 'Z' && jj {
+			results = append(results, s[j:i])
+			j = i
+			jj = false
+		} else {
+			jj = true
+		}
+	}
+	if j < num {
+		results = append(results, s[j:])
+	}
+	return results
+}
+
 // HashCode hashes a buffer to a unique hashcode
 func HashCode(content []byte) uint32 {
 	return crc32.ChecksumIEEE(content)

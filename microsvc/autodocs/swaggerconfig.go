@@ -6,13 +6,15 @@ type SwaggerConfig struct {
 	OpenAPI             string                    `json:"openapi,omitempty"`
 	Info                DocsInfo                  `json:"info"`
 	Host                string                    `json:"host"`
-	BasePath            string                    `json:"basePath"`
+	BasePath            string                    `json:"basePath,omitempty"`
+	Servers             []ServerInfo              `json:"servers,omitempty"`
 	Tags                []TagInfo                 `json:"tags"`
 	Schemes             []string                  `json:"schemes"`
-	Paths               map[string]PathInfo       `json:"paths"`
-	SecurityDefinitions SecurityDefinitions       `json:"securityDefinitions"`
+	Paths               map[string]*PathInfo      `json:"paths"`
+	SecurityDefinitions SecurityDefinitions       `json:"securityDefinitions,omitempty"`
 	Definitions         map[string]DefinitionInfo `json:"definitions"`
 	ExternalDocs        ExternalDocsInfo          `json:"externalDocs,omitempty"`
+	Components          Components                `json:"components,omitempty"`
 }
 
 // DocsInfo document information object
@@ -29,6 +31,12 @@ type DocsInfo struct {
 type ContactInfo struct {
 	Email     string `json:"email,omitempty"`
 	Telephone string `json:"telephone,omitempty"`
+}
+
+// ServerInfo server api base path
+type ServerInfo struct {
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
 }
 
 // LicenseInfo license information
@@ -52,11 +60,16 @@ type ExternalDocsInfo struct {
 
 // PathInfo path information
 type PathInfo struct {
-	Post   *QueryInfo `json:"post,omitempty"`
-	Get    *QueryInfo `json:"get,omitempty"`
-	Put    *QueryInfo `json:"put,omitempty"`
-	Delete *QueryInfo `json:"delete,omitempty"`
-	Patch  *QueryInfo `json:"patch,omitempty"`
+	Summary     string     `json:"summary,omitempty"`
+	Description string     `json:"description,omitempty"`
+	OperationID string     `json:"operationId,omitempty"`
+	Post        *QueryInfo `json:"post,omitempty"`
+	Get         *QueryInfo `json:"get,omitempty"`
+	Put         *QueryInfo `json:"put,omitempty"`
+	Delete      *QueryInfo `json:"delete,omitempty"`
+	Patch       *QueryInfo `json:"patch,omitempty"`
+	Head        *QueryInfo `json:"head,omitempty"`
+	Option      *QueryInfo `json:"option,omitempty"`
 }
 
 // QueryInfo query information
@@ -71,6 +84,7 @@ type QueryInfo struct {
 	RequestBody RequestBodyInfo       `json:"requestBody,omitempty"`
 	Responses   map[string]SchemaInfo `json:"responses"`
 	Security    []interface{}         `json:"security,omitempty"`
+	Deprecated  bool                  `json:"deprecated,omitempty"`
 }
 
 // ParameterInfo parameter information
@@ -134,18 +148,24 @@ type QuerySecurityAuthInfo struct {
 	PrestoreAuth []string `json:"petstoreAuth,omitempty"`
 }
 
+// Components struct
+type Components struct {
+	SecuritySchemes SecurityDefinitions `json:"securitySchemes,omitempty"`
+}
+
 // SecurityDefinitions security definition
 type SecurityDefinitions struct {
-	APIKey       *APIKeyInfo       `json:"jwt,omitempty"`
-	BasicAuth    *APIKeyInfo       `json:"basicAuth,omitempty"`
+	APIKey       *BasicAuthInfo    `json:"jwt,omitempty"`
+	BasicAuth    *BasicAuthInfo    `json:"basicAuth,omitempty"`
 	PrestoreAuth *PrestoreAuthInfo `json:"petstoreAuth,omitempty"`
 }
 
-// APIKeyInfo struct
-type APIKeyInfo struct {
-	Type string `json:"type"`
-	Name string `json:"name,omitempty"`
-	In   string `json:"in,omitempty"`
+// BasicAuthInfo struct
+type BasicAuthInfo struct {
+	Type   string `json:"type"`
+	Name   string `json:"name,omitempty"`
+	Scheme string `json:"scheme,omitempty"`
+	In     string `json:"in,omitempty"`
 }
 
 // PrestoreAuthInfo struct

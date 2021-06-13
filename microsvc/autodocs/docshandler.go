@@ -1,23 +1,37 @@
 package autodocs
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"path"
 	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/kataras/iris"
 	"github.com/kevinyjn/gocom/config"
-	"github.com/kevinyjn/gocom/config/results"
 	"github.com/kevinyjn/gocom/logger"
-	"github.com/kevinyjn/gocom/mq/mqenv"
 	"github.com/kevinyjn/gocom/utils"
 )
+
+// DocsHandler interface of handler defination
+type DocsHandler interface {
+	GetGroup() string
+	GetName() string
+	GetRoutingKey() string
+	GetSummary() string
+	GetDescription() string
+	GetOperationID() string
+	GetAllowsMethod() string
+	GetParametersDocsInfo() []ParameterInfo
+	GetRequestBodyDocsInfo() RequestBodyInfo
+	GetResponsesDocsInfo() map[string]SchemaInfo
+}
+
+// DocsHandlersManager interfaces of docs handler manager
+type DocsHandlersManager interface {
+	AllDocHandlers() []DocsHandler
+}
 
 // Docs constants
 const (
@@ -30,66 +44,31 @@ var (
 	DocumentTitle       = "Document"
 	DocumentDescription = "Document Description"
 	DocumentVersion     = "0.0.1"
-	APIBaseURI          = "/api/"
 	OAuthURL            = ""
-	UserVerifyManager   LoginVerifier
 
 	_controllerGroupDescriptions   = map[string]string{}
 	_controllerHandlerDescriptions = map[string]string{}
-
-	_builtinUsers = builtinUsersWrapper{
-		users: map[string]LoginUser{
-			"docsuser": &builtinUser{
-				Name:           "docsuser",
-				UserID:         "-19900001",
-				AppID:          "-1990",
-				passwordOrHash: "000000",
-			},
-		},
-	}
-
-	_docsHandlerLoaded                 = false
-	_handlersManager   HandlersManager = nil
+	_apiBaseRoute                  = "/api/"
+	_docsHandlers                  DocsHandlersManager
 )
-
-// Handler interface of handler defination
-type Handler interface {
-	GetGroup() string
-	GetName() string
-	GetRoutingKey() string
-	GetSummary() string
-	GetDescription() string
-	GetOperationID() string
-	GetParametersDocsInfo() []ParameterInfo
-	// GetRequestBodyDocsInfo() RequestBodyInfo
-	GetResponsesDocsInfo() map[string]SchemaInfo
-	Execute(mqenv.MQConsumerMessage) *mqenv.MQPublishMessage
-}
-
-// HandlersManager interfaces of handler manager
-type HandlersManager interface {
-	AllDocHandlers() []Handler
-	GetHandler(routingKey string) Handler
-}
 
 // IsDocsHandlerLoaded boolean
 func IsDocsHandlerLoaded() bool {
-	return _docsHandlerLoaded
+	return _docsHandlers != nil
 }
 
 // LoadDocsHandler docs handler, the method would affects unique load
-func LoadDocsHandler(app *iris.Application, handlersManager HandlersManager) {
-	if _docsHandlerLoaded || nil == app {
+func LoadDocsHandler(app *iris.Application, apiBaseRoute string, handlersManager DocsHandlersManager) {
+	if nil != _docsHandlers || nil == app {
 		return
 	}
-	_docsHandlerLoaded = true
-	_handlersManager = handlersManager
+	_docsHandlers = handlersManager
+	_apiBaseRoute = apiBaseRoute
 	swaggerPath := getSwaggerPath()
 	app.RegisterView(iris.HTML(swaggerPath, config.TemplateViewEndfix))
 	app.StaticWeb(DocsRoute, swaggerPath)
 
 	app.Get(DocsRoute, handlerRedirectToDocsPage)
-	app.Post(APIBaseURI+"{groupName:string}/{apiName:string}", handlerTryoutAPICase)
 	party := app.Party(DocsRoute)
 	party.Get(DocsIndexRoute, handlerDocsPage)
 	party.Get(DocsSwaggerConfigRoute, handlerGetSwaggerConfig)
@@ -103,69 +82,6 @@ func SetControllerGroupDescription(controllerName string, description string) {
 // SetControllerHandlerDescription for controller name and handler name
 func SetControllerHandlerDescription(controllerName string, handlerName string, description string) {
 	_controllerHandlerDescriptions[controllerName+"."+handlerName] = description
-}
-
-// LoginUser interface of login user information
-type LoginUser interface {
-	GetUserID() string
-	GetAppID() string
-	GetName() string
-	VerifyPassword(passwordOrHash string) bool
-}
-
-// LoginVerifier interface of login user validator
-type LoginVerifier interface {
-	VerifyUser(userName string, passwordOrHash string) (LoginUser, error)
-}
-
-// builtinUser
-type builtinUser struct {
-	UserID         string `json:"uid"`
-	Name           string `json:"name"`
-	AppID          string `json:"appId"`
-	passwordOrHash string `json:"-"`
-}
-
-type builtinUsersWrapper struct {
-	users map[string]LoginUser
-	mu    sync.RWMutex
-}
-
-// VerifyUser if user exists or password matches
-func (buw *builtinUsersWrapper) VerifyUser(userName string, passwordOrHash string) (LoginUser, error) {
-	buw.mu.RLock()
-	defer buw.mu.RUnlock()
-	if nil == buw.users {
-		return nil, fmt.Errorf("User name does not exists")
-	}
-	u, _ := buw.users[userName]
-	if nil == u {
-		return nil, fmt.Errorf("User name does not exists")
-	}
-	if false == u.VerifyPassword(passwordOrHash) {
-		return nil, fmt.Errorf("User password were not correct")
-	}
-	return u, nil
-}
-
-// GetUserID user id
-func (bu *builtinUser) GetUserID() string {
-	return bu.UserID
-}
-
-// GetAppID app id
-func (bu *builtinUser) GetAppID() string {
-	return bu.AppID
-}
-
-// GetName name of user
-func (bu *builtinUser) GetName() string {
-	return bu.Name
-}
-
-// VerifyPassword if password matches
-func (bu *builtinUser) VerifyPassword(passwordOrHash string) bool {
-	return passwordOrHash == bu.passwordOrHash
 }
 
 // getSwaggerPath : find valid swagger static file path
@@ -199,6 +115,7 @@ func getBaseRoutePath(ctx iris.Context) string {
 
 // handlerDocsPage document index page
 func handlerDocsPage(ctx iris.Context) {
+	ctx.ViewData("Title", DocumentTitle)
 	ctx.View("index.html")
 }
 
@@ -210,14 +127,15 @@ func handlerRedirectToDocsPage(ctx iris.Context) {
 func getAPISecurityInfo() (SecurityDefinitions, []interface{}) {
 	secNames := []interface{}{}
 	sec := SecurityDefinitions{
-		APIKey: &APIKeyInfo{
+		APIKey: &BasicAuthInfo{
 			Type: "apiKey",
 			Name: "Authorization",
 			In:   "header",
 		},
-		BasicAuth: &APIKeyInfo{
-			Type: "basic",
-			Name: "Authorization",
+		BasicAuth: &BasicAuthInfo{
+			Type:   "http",
+			Scheme: "basic",
+			Name:   "Authorization",
 		},
 	}
 	secNames = append(secNames, map[string][]string{
@@ -239,25 +157,34 @@ func getAPISecurityInfo() (SecurityDefinitions, []interface{}) {
 
 // handlerGetSwaggerConfig : auto generates the handlers documents
 func handlerGetSwaggerConfig(ctx iris.Context) {
+	docsServerAPIPath := getBaseRoutePath(ctx) + _apiBaseRoute
 	configs := SwaggerConfig{
-		Swagger: "2.0",
-		// OpenAPI: "3.0.0",
+		// Swagger: "2.0",
+		OpenAPI: "3.0.0",
 		Info: DocsInfo{
 			Title:       DocumentTitle,
 			Description: DocumentDescription,
 			Version:     DocumentVersion,
 		},
 		Host:     ctx.Host(),
-		BasePath: getBaseRoutePath(ctx) + APIBaseURI,
-		Tags:     []TagInfo{},
-		Schemes:  []string{"https", "http"},
-		Paths:    map[string]PathInfo{},
+		BasePath: docsServerAPIPath,
+		Servers: []ServerInfo{
+			{
+				URL:         docsServerAPIPath,
+				Description: "Development Server",
+			},
+		},
+		Tags:       []TagInfo{},
+		Schemes:    []string{"https", "http"},
+		Paths:      map[string]*PathInfo{},
+		Components: Components{},
 	}
 	if "http" == ctx.Request().URL.Scheme || strings.HasPrefix(ctx.Request().Referer(), "http:") {
 		configs.Schemes = []string{"http", "https"}
 	}
 	secs, secNames := getAPISecurityInfo()
-	configs.SecurityDefinitions = secs
+	// configs.SecurityDefinitions = secs
+	configs.Components.SecuritySchemes = secs
 	controllerGroupDescriptions := _controllerGroupDescriptions
 	controllerHandlerDescriptions := _controllerHandlerDescriptions
 	if nil == controllerGroupDescriptions {
@@ -267,8 +194,8 @@ func handlerGetSwaggerConfig(ctx iris.Context) {
 		controllerHandlerDescriptions = map[string]string{}
 	}
 
-	if nil != _handlersManager {
-		handlers := _handlersManager.AllDocHandlers()
+	if nil != _docsHandlers {
+		handlers := _docsHandlers.AllDocHandlers()
 		for _, h := range handlers {
 			handlerDescription := controllerHandlerDescriptions[h.GetRoutingKey()]
 			if "" == handlerDescription {
@@ -281,12 +208,48 @@ func handlerGetSwaggerConfig(ctx iris.Context) {
 				Produces:    []string{"application/json"},
 				Description: handlerDescription,
 				OperationID: h.GetOperationID(),
-				Parameters:  h.GetParametersDocsInfo(),
 				Responses:   h.GetResponsesDocsInfo(),
 				Security:    secNames,
 			}
-			configs.Paths[fmt.Sprintf("/%s/%s", h.GetGroup(), h.GetName())] = PathInfo{
-				Post: &qi,
+			pn := fmt.Sprintf("/%s/%s", h.GetGroup(), h.GetName())
+			pi, exists := configs.Paths[pn]
+			if false == exists {
+				pi = &PathInfo{}
+				configs.Paths[pn] = pi
+			}
+			switch h.GetAllowsMethod() {
+			case "GET":
+				qi.Parameters = h.GetParametersDocsInfo()
+				pi.Get = &qi
+				break
+			case "POST":
+				qi.RequestBody = h.GetRequestBodyDocsInfo()
+				pi.Post = &qi
+				break
+			case "PUT":
+				qi.RequestBody = h.GetRequestBodyDocsInfo()
+				pi.Put = &qi
+				break
+			case "PATCH":
+				qi.RequestBody = h.GetRequestBodyDocsInfo()
+				pi.Patch = &qi
+				break
+			case "DELETE":
+				qi.RequestBody = h.GetRequestBodyDocsInfo()
+				pi.Delete = &qi
+				break
+			case "HEAD":
+				qi.Parameters = h.GetParametersDocsInfo()
+				pi.Head = &qi
+				break
+			case "OPTION":
+				qi.Parameters = h.GetParametersDocsInfo()
+				pi.Option = &qi
+				break
+			default:
+				qi.RequestBody = h.GetRequestBodyDocsInfo()
+				pi.Post = &qi
+				break
 			}
 
 			if "" == controllerGroupDescriptions[h.GetGroup()] {
@@ -320,110 +283,4 @@ func handlerGetSwaggerConfig(ctx iris.Context) {
 	}
 	ctx.Header("Content-Type", "application/json")
 	ctx.WriteString(string(body))
-}
-
-func parseRequestAuthorization(ctx iris.Context) (LoginUser, error) {
-	var u LoginUser
-	var err error
-	authToken := ctx.GetHeader("Authorization")
-	if "" == authToken {
-		authToken = ctx.GetHeader("authorization")
-	}
-	remoteIP := utils.GetRemoteAddress(ctx.Request())
-	for {
-		if "" == authToken {
-			err = fmt.Errorf("No user has logged in")
-			break
-		}
-		authSlices := strings.SplitN(authToken, " ", 2)
-		if len(authSlices) < 2 {
-			err = fmt.Errorf("Un recognized token")
-			break
-		}
-		switch authSlices[0] {
-		case "Basic":
-			basicToken, e := base64.StdEncoding.DecodeString(authSlices[1])
-			if nil != e {
-				err = e
-			}
-			loginTokens := strings.SplitN(string(basicToken), ":", 2)
-			passPart := ""
-			if len(loginTokens) > 1 {
-				passPart = loginTokens[1]
-			}
-			if nil != UserVerifyManager {
-				u, err = UserVerifyManager.VerifyUser(loginTokens[0], passPart)
-			}
-			if nil == u && ("127.0.0.1" == remoteIP || "::1" == remoteIP) {
-				u, err = _builtinUsers.VerifyUser(loginTokens[0], passPart)
-			}
-			break
-		case "Bearer":
-			// jwt token
-			break
-		}
-
-		if nil == u && nil == err {
-			err = fmt.Errorf("Verify user login failed")
-		}
-		break
-	}
-	return u, err
-}
-
-// handlerTryoutAPICase : 测试API支持用例
-func handlerTryoutAPICase(ctx iris.Context) {
-	groupName := ctx.Params().Get("groupName")
-	apiName := ctx.Params().Get("apiName")
-	routingKey := fmt.Sprintf("%s.%s", groupName, apiName)
-	resObj := results.NewResultObject()
-	for {
-		if nil == _handlersManager {
-			resObj.Code = results.InnerError
-			resObj.Message = "处理单元未加载。"
-			break
-		}
-		handler := _handlersManager.GetHandler(routingKey)
-		if nil == handler {
-			resObj.Code = results.NotFound
-			resObj.Message = fmt.Sprintf("未找到路由键为：%s 的处理器", routingKey)
-			break
-		}
-		body, err := ioutil.ReadAll(ctx.Request().Body)
-		if nil != err {
-			logger.Error.Printf("read content body failed with error:%v", err)
-			resObj.Code = results.InnerError
-			resObj.Message = err.Error()
-			break
-		}
-		if logger.IsDebugEnabled() {
-			logger.Trace.Printf("got %s api query %s", routingKey, string(body))
-		}
-		id := utils.GenLoweruuid()
-		msg := mqenv.MQConsumerMessage{
-			RoutingKey:    routingKey,
-			AppID:         "",
-			UserID:        "",
-			MessageID:     id,
-			CorrelationID: id,
-			ReplyTo:       "rpc-" + id,
-			Body:          body,
-		}
-		loginUser, _ := parseRequestAuthorization(ctx)
-		if nil != loginUser {
-			msg.AppID = loginUser.GetAppID()
-			msg.UserID = loginUser.GetUserID()
-		}
-
-		pubMsg := handler.Execute(msg)
-		if nil == pubMsg {
-			resObj.Code = results.InnerError
-			resObj.Message = fmt.Sprintf("处理器 %s 未返回响应", routingKey)
-			break
-		}
-
-		ctx.Write(pubMsg.Body)
-		return
-	}
-	ctx.WriteString(resObj.Encode())
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/kataras/iris"
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/microsvc/autodocs"
+	"github.com/kevinyjn/gocom/microsvc/resthandlers"
 	"github.com/kevinyjn/gocom/microsvc/serializers"
 	"github.com/kevinyjn/gocom/mq"
 	"github.com/kevinyjn/gocom/mq/mqenv"
@@ -14,7 +15,7 @@ import (
 )
 
 // LoadControllers load micro service controllers as MQ consumer handlers and RESTful handlers
-func LoadControllers(topicCategory string, controllers []MQController, app ...*iris.Application) error {
+func LoadControllers(topicCategory string, controllers []Controller, app ...*iris.Application) error {
 	var err error
 	for _, controller := range controllers {
 		err = LoadController(topicCategory, controller)
@@ -23,15 +24,21 @@ func LoadControllers(topicCategory string, controllers []MQController, app ...*i
 		}
 	}
 	InitMQRegisterController(topicCategory)
-	if nil != app && len(app) > 0 && false == autodocs.IsDocsHandlerLoaded() {
-		// load docs http handler
-		autodocs.LoadDocsHandler(app[0], GetHandlers())
+	if nil != app && len(app) > 0 {
+		if false == resthandlers.IsRestfulHandlersLoaded() {
+			// load docs http handler
+			resthandlers.LoadRestfulHandlers(app[0], APIBaseURI, GetHandlers())
+		}
+		if false == autodocs.IsDocsHandlerLoaded() {
+			// load docs http handler
+			autodocs.LoadDocsHandler(app[0], APIBaseURI, GetHandlers())
+		}
 	}
 	return err
 }
 
 // LoadController load micro service controller as MQ consumer handlers and RESTful handlers
-func LoadController(topicCategory string, controller MQController) error {
+func LoadController(topicCategory string, controller Controller) error {
 	controller.SetTopicCategory(topicCategory)
 	handlers := analyzeControllerHandlers(controller)
 	err := GetHandlers().RegisterHandlers(topicCategory, handlers)

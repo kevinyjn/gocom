@@ -9,6 +9,7 @@ const (
 	PaymentRequired        = 402
 	Forbidden              = 403
 	NotFound               = 404
+	MethodNotAllowed       = 405
 	InnerError             = 500
 	NotImplemented         = 501
 	ServiceUnavailable     = 503
