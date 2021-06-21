@@ -314,7 +314,7 @@ func (worker *KafkaWorker) extractRoutingKey(packet *KafkaPacket) error {
 	}
 	err := json.Unmarshal(packet.Body, &params)
 	if nil != err {
-		logger.Error.Println(err)
+		// logger.Error.Println(err)
 		return err
 	}
 	if params.Method != "" {
