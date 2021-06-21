@@ -8,10 +8,11 @@ import (
 
 // builtin serialization types
 const (
-	SerializationTypeJSON     = "json"
-	SerializationTypeXML      = "xml"
-	SerializationTypeProtobuf = "protobuf"
-	SerializationTypeHL7      = "hl7"
+	SerializationTypeJSON      = "json"
+	SerializationTypeXML       = "xml"
+	SerializationTypeProtobuf  = "protobuf"
+	SerializationTypeHL7       = "hl7"
+	SerializationTypeURLEncode = "x-www-form-urlencoded"
 )
 
 // SerializationStrategy interface
@@ -43,10 +44,11 @@ type serializerManager struct {
 
 var _serializers = serializerManager{
 	serializers: map[string]Serializable{
-		SerializationTypeJSON:     GetJSONSerializer(),
-		SerializationTypeXML:      GetXMLSerializer(),
-		SerializationTypeProtobuf: GetProtobufSerializer(),
-		SerializationTypeHL7:      GetHL7Serializer(),
+		SerializationTypeJSON:      GetJSONSerializer(),
+		SerializationTypeXML:       GetXMLSerializer(),
+		SerializationTypeProtobuf:  GetProtobufSerializer(),
+		SerializationTypeHL7:       GetHL7Serializer(),
+		SerializationTypeURLEncode: GetURLEncodeSerializer(),
 	},
 	m: sync.RWMutex{},
 }

@@ -5,7 +5,10 @@ import (
 	"reflect"
 
 	"github.com/kataras/iris"
+
+	"github.com/kataras/iris/core/router"
 	"github.com/kevinyjn/gocom/logger"
+	"github.com/kevinyjn/gocom/microsvc/acl"
 	"github.com/kevinyjn/gocom/microsvc/autodocs"
 	"github.com/kevinyjn/gocom/microsvc/resthandlers"
 	"github.com/kevinyjn/gocom/microsvc/serializers"
@@ -15,7 +18,7 @@ import (
 )
 
 // LoadControllers load micro service controllers as MQ consumer handlers and RESTful handlers
-func LoadControllers(topicCategory string, controllers []Controller, app ...*iris.Application) error {
+func LoadControllers(topicCategory string, controllers []Controller, app ...router.Party) error {
 	var err error
 	for _, controller := range controllers {
 		err = LoadController(topicCategory, controller)
@@ -28,6 +31,7 @@ func LoadControllers(topicCategory string, controllers []Controller, app ...*iri
 		if false == resthandlers.IsRestfulHandlersLoaded() {
 			// load docs http handler
 			resthandlers.LoadRestfulHandlers(app[0], APIBaseURI, GetHandlers())
+			acl.GetUserController().Init(app[0])
 		}
 		if false == autodocs.IsDocsHandlerLoaded() {
 			// load docs http handler
@@ -35,6 +39,11 @@ func LoadControllers(topicCategory string, controllers []Controller, app ...*iri
 		}
 	}
 	return err
+}
+
+// LoadAutoDocsHandler manually load docs handler
+func LoadAutoDocsHandler(app *iris.Application) {
+	autodocs.LoadDocsHandler(app, APIBaseURI, GetHandlers())
 }
 
 // LoadController load micro service controller as MQ consumer handlers and RESTful handlers

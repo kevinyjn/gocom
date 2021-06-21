@@ -5,6 +5,7 @@ import (
 	"github.com/kevinyjn/gocom/microsvc/events"
 	"github.com/kevinyjn/gocom/orm/rdbms"
 	"github.com/kevinyjn/gocom/orm/rdbms/behaviors"
+	"github.com/kevinyjn/gocom/utils"
 )
 
 // AccessLogModel interface
@@ -17,18 +18,19 @@ type AccessLogModel interface {
 // AccessLog label element
 type AccessLog struct {
 	ID                          int64  `xorm:"'id' BigInt pk autoincr" json:"id"`
-	AppID                       string `xorm:"'app_id' VARCHAR(42) index" json:"appId"`                 // 应用标识
-	Module                      string `xorm:"'module' VARCHAR(64) notnull index" json:"module"`        // 模块分组
-	Name                        string `xorm:"'name' VARCHAR(64) notnull index" json:"name"`            // 模块功能名称
-	UserID                      string `xorm:"'user_id' VARCHAR(64) index" json:"userId"`               // 用户ID
-	RequestID                   string `xorm:"'request_id' VARCHAR(64) index" json:"requestId"`         // 请求唯一标识
-	CorrelationID               string `xorm:"'correlation_id' VARCHAR(64) index" json:"currelationId"` // 调用链唯一标识
-	DeviceID                    string `xorm:"'device_id' VARCHAR(64) index" json:"deviceId"`           // 设备标识
-	RemoteIP                    string `xorm:"'remote_ip' VARCHAR(64) index" json:"remoteIp"`           // 源IP
-	Agent                       string `xorm:"'agent' VARCHAR(128)" json:"agent"`                       // 源客户端信息
-	Markup                      string `xorm:"'markup' VARCHAR(128)" json:"markup"`                     // 访问界面元素标记
-	Status                      int    `xorm:"'status' Int index" json:"status"`                        // 响应状态
-	Message                     string `xorm:"'message' TEXT" json:"message"`                           // 响应提示
+	AppID                       string `xorm:"'app_id' VARCHAR(42) index" json:"appId"`                                          // 应用标识
+	Module                      string `xorm:"'module' VARCHAR(64) notnull index" json:"module"`                                 // 模块分组
+	Name                        string `xorm:"'name' VARCHAR(64) notnull index" json:"name"`                                     // 模块功能名称
+	UserID                      string `xorm:"'user_id' VARCHAR(64) index" json:"userId"`                                        // 用户ID
+	RequestID                   string `xorm:"'request_id' VARCHAR(64) index" json:"requestId"`                                  // 请求唯一标识
+	CorrelationID               string `xorm:"'correlation_id' VARCHAR(64) index" json:"currelationId"`                          // 调用链唯一标识
+	DeviceID                    string `xorm:"'device_id' VARCHAR(64) index" json:"deviceId"`                                    // 设备标识
+	RemoteIP                    string `xorm:"'remote_ip' VARCHAR(64) index" json:"remoteIp"`                                    // 源IP
+	Agent                       string `xorm:"'agent' VARCHAR(128)" json:"agent"`                                                // 源客户端信息
+	Markup                      string `xorm:"'markup' VARCHAR(128)" json:"markup"`                                              // 访问界面元素标记
+	Status                      int    `xorm:"'status' Int index" json:"status"`                                                 // 响应状态
+	Message                     string `xorm:"'message' TEXT" json:"message"`                                                    // 响应提示
+	Timestamp                   int64  `xorm:"'timestamp' BigInt index comment('Timestamp of event occorred')" json:"timestamp"` // 事件时间戳
 	behaviors.ModifyingBehavior `xorm:"extends"`
 	rdbms.Datasource            `xorm:"-" datasource:"default"`
 }
@@ -87,6 +89,7 @@ func (m *AccessLog) LoadFromEvent(event events.Event) {
 	m.Name = event.GetFrom()
 	m.Status = event.GetStatus()
 	m.Message = event.GetDescription()
+	m.Timestamp = utils.CurrentMillisecond()
 	headers := event.GetHeaders()
 	if nil != headers {
 		m.Agent = headers["agent"]
@@ -98,6 +101,8 @@ func (m *AccessLog) LoadFromEvent(event events.Event) {
 
 // NewRecord of access log model
 func (m *AccessLog) NewRecord() AccessLogModel {
-	log := AccessLog{}
+	log := AccessLog{
+		Timestamp: utils.CurrentMillisecond(),
+	}
 	return &log
 }

@@ -8,7 +8,10 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/kevinyjn/gocom/microsvc/acl"
+
 	"github.com/kataras/iris"
+	"github.com/kataras/iris/core/router"
 	"github.com/kevinyjn/gocom/config"
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/utils"
@@ -25,7 +28,7 @@ type DocsHandler interface {
 	GetAllowsMethod() string
 	GetParametersDocsInfo() []ParameterInfo
 	GetRequestBodyDocsInfo() RequestBodyInfo
-	GetResponsesDocsInfo() map[string]SchemaInfo
+	GetResponsesDocsInfo() map[string]ResponseContentInfo
 }
 
 // DocsHandlersManager interfaces of docs handler manager
@@ -41,8 +44,8 @@ const (
 )
 
 var (
-	DocumentTitle       = "Document"
-	DocumentDescription = "Document Description"
+	DocumentTitle       = "API Explorer"
+	DocumentDescription = "API Explorer Document Description"
 	DocumentVersion     = "0.0.1"
 	OAuthURL            = ""
 
@@ -58,20 +61,29 @@ func IsDocsHandlerLoaded() bool {
 }
 
 // LoadDocsHandler docs handler, the method would affects unique load
-func LoadDocsHandler(app *iris.Application, apiBaseRoute string, handlersManager DocsHandlersManager) {
+func LoadDocsHandler(app router.Party, apiBaseRoute string, handlersManager DocsHandlersManager) {
 	if nil != _docsHandlers || nil == app {
 		return
 	}
 	_docsHandlers = handlersManager
 	_apiBaseRoute = apiBaseRoute
 	swaggerPath := getSwaggerPath()
-	app.RegisterView(iris.HTML(swaggerPath, config.TemplateViewEndfix))
+	if application, ok := app.(*iris.Application); ok {
+		application.RegisterView(iris.HTML(swaggerPath, config.TemplateViewEndfix))
+	}
 	app.StaticWeb(DocsRoute, swaggerPath)
 
 	app.Get(DocsRoute, handlerRedirectToDocsPage)
 	party := app.Party(DocsRoute)
 	party.Get(DocsIndexRoute, handlerDocsPage)
 	party.Get(DocsSwaggerConfigRoute, handlerGetSwaggerConfig)
+
+	acl.PushBuiltinUser(&acl.BuiltinUser{
+		Name:           "docsuser",
+		UserID:         "-19900001",
+		AppID:          "-1990",
+		PasswordOrHash: "000000",
+	})
 }
 
 // SetControllerGroupDescription for controller

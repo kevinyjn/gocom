@@ -324,12 +324,6 @@ func CurrentMillisecond() int64 {
 	return nowTimestamp
 }
 
-// CurTimestampMiliSec millisecond
-// Deprecated: implements CurrentMillisecond instead
-func CurTimestampMiliSec() int64 {
-	return CurrentMillisecond()
-}
-
 // ParseRemoteIP parse remote ip
 func ParseRemoteIP(val string) string {
 	i := strings.LastIndex(val, ":")
@@ -816,4 +810,16 @@ func HumanByteSize(bs int) string {
 		return fmt.Sprintf("%d Bytes", bs)
 	}
 	return fmt.Sprintf("%.2f %s", n, name)
+}
+
+// IsCapital if strings has a capital character
+func IsCapital(s string) bool {
+	if len(s) <= 0 {
+		return false
+	}
+	c := s[0]
+	if c >= 'A' && c <= 'Z' {
+		return true
+	}
+	return false
 }

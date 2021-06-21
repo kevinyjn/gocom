@@ -74,17 +74,17 @@ type PathInfo struct {
 
 // QueryInfo query information
 type QueryInfo struct {
-	Tags        []string              `json:"tags,omitempty"`
-	Summary     string                `json:"summary,omitempty"`
-	Description string                `json:"description,omitempty"`
-	OperationID string                `json:"operationId,omitempty"`
-	Consumes    []string              `json:"consumes,omitempty"`
-	Produces    []string              `json:"produces,omitempty"`
-	Parameters  []ParameterInfo       `json:"parameters,omitempty"`
-	RequestBody RequestBodyInfo       `json:"requestBody,omitempty"`
-	Responses   map[string]SchemaInfo `json:"responses"`
-	Security    []interface{}         `json:"security,omitempty"`
-	Deprecated  bool                  `json:"deprecated,omitempty"`
+	Tags        []string                       `json:"tags,omitempty"`
+	Summary     string                         `json:"summary,omitempty"`
+	Description string                         `json:"description,omitempty"`
+	OperationID string                         `json:"operationId,omitempty"`
+	Consumes    []string                       `json:"consumes,omitempty"`
+	Produces    []string                       `json:"produces,omitempty"`
+	Parameters  []ParameterInfo                `json:"parameters,omitempty"`
+	RequestBody RequestBodyInfo                `json:"requestBody,omitempty"`
+	Responses   map[string]ResponseContentInfo `json:"responses"`
+	Security    []interface{}                  `json:"security,omitempty"`
+	Deprecated  bool                           `json:"deprecated,omitempty"`
 }
 
 // ParameterInfo parameter information
@@ -98,12 +98,19 @@ type ParameterInfo struct {
 	Items            *PropertyInfo   `json:"items,omitempty"`
 	CollectionFormat string          `json:"collectionFormat,omitempty"`
 	Schema           *DefinitionInfo `json:"schema,omitempty"`
+	Style            string          `json:"style,omitempty"`
 }
 
 // RequestBodyInfo parameter in body information
 type RequestBodyInfo struct {
 	Description string                `json:"description,omitempty"`
 	Required    bool                  `json:"required,omitempty"`
+	Content     map[string]SchemaInfo `json:"content,omitempty"`
+}
+
+// ResponseContentInfo response content in body information
+type ResponseContentInfo struct {
+	Description string                `json:"description,omitempty"`
 	Content     map[string]SchemaInfo `json:"content,omitempty"`
 }
 

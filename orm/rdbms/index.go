@@ -53,6 +53,7 @@ type DataAccessEngine struct {
 	mutexDatasourceName            sync.RWMutex
 	mutexTable                     sync.RWMutex
 	keepaliveTicker                *time.Ticker
+	noAutoTime                     bool // this feature could be removed at xorm@v1.3.0
 }
 
 var _dpm = &DataAccessEngine{
@@ -64,6 +65,15 @@ var _dpm = &DataAccessEngine{
 	mutexDatasourceName:            sync.RWMutex{},
 	mutexTable:                     sync.RWMutex{},
 	keepaliveTicker:                nil,
+	noAutoTime:                     true,
+}
+
+type dbSavingSession interface {
+	Insert(beans ...interface{}) (int64, error)
+	InsertOne(bean interface{}) (int64, error)
+	Update(bean interface{}, condiBeans ...interface{}) (int64, error)
+	Delete(bean interface{}) (int64, error)
+	Close() error
 }
 
 // GetInstance data persistence manager
@@ -139,6 +149,12 @@ func (dae *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 		go dae.StartKeepAlive()
 	}
 	return orm, nil
+}
+
+// EnableAutoTime enable auto time for created, updated event
+// if enabled, the model BeforeInsert and BeforeUpdate event would not be effective for saving to db
+func (dae *DataAccessEngine) EnableAutoTime(enabled bool) {
+	dae.noAutoTime = !enabled
 }
 
 // StartKeepAlive keepalive
@@ -264,6 +280,43 @@ func (dae *DataAccessEngine) FetchRecords(condiBeans interface{}, limit, offset 
 	return records, nil
 }
 
+// FetchRecordsAndCountTotal fetch all data object from database on conditionBean and limit, offset
+// Nodes: there would be a max {MaxArrayCachingDurationSeconds} seconds non-syncronized to db data
+// in case inserted some records in rows that conditionBean specifies. while, this case would not
+// be commonly comes out because that the new record would be inserted at the tail of rows in many
+// databases
+// returns total count of records in database by condiBeans and error object if gots error
+func (dae *DataAccessEngine) FetchRecordsAndCountTotal(condiBeans interface{}, limit, offset int, results interface{}) (int64, error) {
+	resultsValue := reflect.ValueOf(results)
+	if resultsValue.Type().Kind() != reflect.Ptr {
+		return 0, fmt.Errorf("The results parameter should not be non-pointer array")
+	}
+	if resultsValue.Elem().Type().Kind() != reflect.Slice {
+		return 0, fmt.Errorf("The results parameter were not array type")
+	}
+	count, err := dae.Count(condiBeans)
+	if nil != err {
+		return 0, err
+	}
+	records, err := dae.FetchRecords(condiBeans, limit, offset)
+	if nil != err {
+		return 0, err
+	}
+	var resultsElem reflect.Value
+	if !resultsValue.IsValid() || resultsValue.IsNil() {
+		resultsElem = reflect.New(reflect.TypeOf(results).Elem())
+	} else {
+		resultsElem = resultsValue.Elem()
+	}
+	rowsValue := make([]reflect.Value, len(records))
+	for i, row := range records {
+		rowsValue[i] = reflect.ValueOf(row)
+		// resultsElem.Index(i).Set(reflect.ValueOf(row))
+	}
+	resultsElem.Set(reflect.Append(resultsElem, rowsValue...))
+	return count, nil
+}
+
 // FetchOne Get retrieve one record from table, bean's non-empty fields are conditions.
 // The bean should be a pointer to a struct
 func (dae *DataAccessEngine) FetchOne(bean interface{}) (bool, error) {
@@ -335,15 +388,20 @@ func (dae *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
 			return false, err
 		}
 	}
+	var session dbSavingSession = orm
+	if dae.noAutoTime {
+		session = orm.NoAutoTime()
+		defer session.Close()
+	}
 	if ok {
-		rc, err = orm.Update(bean, condiBean)
+		rc, err = session.Update(bean, condiBean)
 		if nil != err {
 			logger.Error.Printf("Saving record:%+v while do update with condition:%v failed with error:%v", bean, condiBean, err)
 			return false, err
 		}
 		logger.Info.Printf("successfully update table:%s affected %d records with item:%v", getTableName(bean), rc, bean)
 	} else {
-		rc, err = orm.Insert(bean)
+		rc, err = session.Insert(bean)
 		if nil != err {
 			logger.Error.Printf("Saving record:%+v while do insert failed with error:%v", bean, err)
 			return false, err
@@ -410,7 +468,12 @@ func (dae *DataAccessEngine) Insert(beans ...interface{}) (int64, error) {
 	var rc int64
 	var enableCaching bool = false
 
-	rc, err = orm.Insert(beans...)
+	var session dbSavingSession = orm
+	if dae.noAutoTime {
+		session = orm.NoAutoTime()
+		defer session.Close()
+	}
+	rc, err = session.Insert(beans...)
 	if nil != err {
 		logger.Error.Printf("Insert records while do insert failed with error:%v", err)
 		return rc, err
@@ -442,7 +505,12 @@ func (dae *DataAccessEngine) InsertMulti(beans []interface{}) (int64, error) {
 	var rc int64
 	var enableCaching bool = false
 
-	rc, err = orm.Insert(beans...)
+	var session dbSavingSession = orm
+	if dae.noAutoTime {
+		session = orm.NoAutoTime()
+		defer session.Close()
+	}
+	rc, err = session.Insert(beans...)
 	if nil != err {
 		logger.Error.Printf("InsertMulti record while do insert failed with error:%v", err)
 		return rc, err
@@ -467,7 +535,12 @@ func (dae *DataAccessEngine) Delete(bean interface{}) (int64, error) {
 		logger.Error.Printf("Deleting record by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return 0, err
 	}
-	affected, err := orm.Delete(bean)
+	var session dbSavingSession = orm
+	if dae.noAutoTime {
+		session = orm.NoAutoTime()
+		defer session.Close()
+	}
+	affected, err := session.Delete(bean)
 	getCaches().group(structureName).del(bean)
 	if nil != err {
 		logger.Error.Printf("Deleting record by table:%s on condition:%+v failed with error:%v", getTableName(bean), bean, err)
@@ -763,3 +836,13 @@ func queryAll(orm *xorm.Engine, condiBeans interface{}, records *[]interface{}, 
 	}
 	return err
 }
+
+// // nowTime return current time
+// func (engine *xorm.Engine) nowTime(col *schemas.Column) (interface{}, time.Time) {
+// 	t := time.Now()
+// 	var tz = engine.DatabaseTZ
+// 	if !col.DisableTimeZone && col.TimeZone != nil {
+// 		tz = col.TimeZone
+// 	}
+// 	return dialects.FormatTime(engine.dialect, col.SQLType.Name, t.In(tz)), t.In(engine.TZLocation)
+// }

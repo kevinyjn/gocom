@@ -259,7 +259,7 @@ func (h *mqHandler) formatInputs(msg mqenv.MQConsumerMessage) ([]reflect.Value, 
 			}
 		} else {
 			var v reflect.Value
-			v, err = iw.parsePayload(msg.Body)
+			v, err = iw.parsePayload(msg.Body, msg.ContentType)
 			inParams[i] = v
 		}
 	}
@@ -431,38 +431,47 @@ func (h *mqHandler) postOnError(msg mqenv.MQConsumerMessage, status int, err err
 
 // GetParametersDocsInfo for auto docs
 func (h *mqHandler) GetParametersDocsInfo() []autodocs.ParameterInfo {
-	var schema *autodocs.DefinitionInfo
+	var paramValueType reflect.Type
+	var paramFieldSerializingTagName = ""
+	var parameters []autodocs.ParameterInfo
 	for _, it := range h.inTypes {
 		if it.isMQParameter {
 			continue
 		} else if it.isErrorStatus || it.isError {
 			continue
 		}
-		schema = &autodocs.DefinitionInfo{
-			Type:       "object",
-			Properties: autodocs.ParseResponseParameters(it.valueType, it.GetParameterFieldSerializingTagName()),
-		}
+		paramValueType = it.valueType
+		paramFieldSerializingTagName = it.GetParameterFieldSerializingTagName()
+		// schema = &autodocs.DefinitionInfo{
+		// 	Type:       "object",
+		// 	Properties: autodocs.ParseParameters(it.valueType, it.GetParameterFieldSerializingTagName()),
+		// }
 		break
 	}
-	var parameters []autodocs.ParameterInfo
+	if "" == paramFieldSerializingTagName {
+		return []autodocs.ParameterInfo{}
+	}
 	switch h.GetAllowsMethod() {
 	case "GET", "HEAD":
-		if nil == schema {
-			parameters = []autodocs.ParameterInfo{}
-		} else {
-			parameters = make([]autodocs.ParameterInfo, len(schema.Properties))
-			i := 0
-			for name, prop := range schema.Properties {
-				parameters[i] = autodocs.ParameterInfo{
-					Type:        prop.Type,
-					Name:        name,
-					In:          "query",
-					Description: prop.Description,
-					Format:      prop.Format,
-				}
-				i++
-			}
-		}
+		parameters = autodocs.ParseParameters(paramValueType, paramFieldSerializingTagName, "query")
+		// i := 0
+		// for name, prop := range schema.Properties {
+		// 	parameters[i] = autodocs.ParameterInfo{
+		// 		Type:        prop.Type,
+		// 		Name:        name,
+		// 		In:          "query",
+		// 		Description: prop.Description,
+		// 		Format:      prop.Format,
+		// 	}
+		// 	if nil != prop.Properties {
+		// 		parameters[i].Style = "deepObject"
+		// 		parameters[i].Schema = &autodocs.DefinitionInfo{
+		// 			Type:       "object",
+		// 			Properties: prop.Properties,
+		// 		}
+		// 	}
+		// 	i++
+		// }
 		break
 	default:
 		parameters = []autodocs.ParameterInfo{
@@ -472,7 +481,10 @@ func (h *mqHandler) GetParametersDocsInfo() []autodocs.ParameterInfo {
 				In:          "body",
 				Description: "入参包体",
 				Required:    true,
-				Schema:      schema,
+				Schema: &autodocs.DefinitionInfo{
+					Type:       "object",
+					Properties: autodocs.ParseResponseParameters(paramValueType, paramFieldSerializingTagName, "body"),
+				},
 			},
 		}
 		break
@@ -494,7 +506,7 @@ func (h *mqHandler) GetRequestBodyDocsInfo() autodocs.RequestBodyInfo {
 		schemaInfo.SerializationType = "application/" + it.GetParameterFieldSerializingTagName()
 		schemaInfo.Schema = &autodocs.DefinitionInfo{
 			Type:       "object",
-			Properties: autodocs.ParseResponseParameters(it.valueType, it.GetParameterFieldSerializingTagName()),
+			Properties: autodocs.ParseResponseParameters(it.valueType, it.GetParameterFieldSerializingTagName(), "body"),
 		}
 		break
 	}
@@ -514,9 +526,9 @@ func (h *mqHandler) GetRequestBodyDocsInfo() autodocs.RequestBodyInfo {
 }
 
 // GetResponsesDocsInfo for auto docs
-func (h *mqHandler) GetResponsesDocsInfo() map[string]autodocs.SchemaInfo {
-	responses := map[string]autodocs.SchemaInfo{}
-	okResponse := autodocs.SchemaInfo{
+func (h *mqHandler) GetResponsesDocsInfo() map[string]autodocs.ResponseContentInfo {
+	responses := map[string]autodocs.ResponseContentInfo{}
+	okResponse := autodocs.ResponseContentInfo{
 		Description: "成功响应",
 	}
 	rootResponseSchema := autodocs.DefinitionInfo{
@@ -543,24 +555,33 @@ func (h *mqHandler) GetResponsesDocsInfo() map[string]autodocs.SchemaInfo {
 		respSchema.Properties["data"] = autodocs.PropertyInfo{
 			Type:        "object",
 			Description: "响应数据",
-			Properties:  autodocs.ParseResponseParameters(ot.valueType, ot.GetParameterFieldSerializingTagName()),
+			Properties:  autodocs.ParseResponseParameters(ot.valueType, ot.GetParameterFieldSerializingTagName(), "body"),
 		}
-		okResponse.Schema = &respSchema
+		serializingType := "application/" + ot.GetParameterFieldSerializingTagName()
+		okResponse.Content = map[string]autodocs.SchemaInfo{
+			serializingType: {
+				Schema: &respSchema,
+			},
+		}
 	}
 	responses["0"] = okResponse
-	responses["非0"] = autodocs.SchemaInfo{
+	responses["非0"] = autodocs.ResponseContentInfo{
 		Description: "失败响应",
-		Schema: &autodocs.DefinitionInfo{
-			Properties: map[string]autodocs.PropertyInfo{
-				"code": {
-					Type:        "integer",
-					Description: "失败编码",
-					Example:     strconv.Itoa(results.InvalidInput),
-				},
-				"message": {
-					Type:        "string",
-					Description: "失败原因",
-					Example:     "请填写合法参数",
+		Content: map[string]autodocs.SchemaInfo{
+			"application/json": {
+				Schema: &autodocs.DefinitionInfo{
+					Properties: map[string]autodocs.PropertyInfo{
+						"code": {
+							Type:        "integer",
+							Description: "失败编码",
+							Example:     strconv.Itoa(results.InvalidInput),
+						},
+						"message": {
+							Type:        "string",
+							Description: "失败原因",
+							Example:     "请填写合法参数",
+						},
+					},
 				},
 			},
 		},
@@ -877,7 +898,7 @@ func (w *paramTypeWrapper) initAndCheckConsumerMessage(valueType reflect.Type, c
 	}
 }
 
-func (w *paramTypeWrapper) parsePayload(payload []byte) (reflect.Value, error) {
+func (w *paramTypeWrapper) parsePayload(payload []byte, srcContentType string) (reflect.Value, error) {
 	var v reflect.Value
 	var err error
 	if w.isPtr {
@@ -896,7 +917,12 @@ func (w *paramTypeWrapper) parsePayload(payload []byte) (reflect.Value, error) {
 			err = fmt.Errorf("The parameter %s where not serializable type", reflect.TypeOf(v).Elem().Name())
 		}
 	} else {
-		serializer := serializers.GetSerializer(w.serializingType)
+		var serializer serializers.Serializable
+		if "application/x-www-form-urlencoded" == srcContentType {
+			serializer = serializers.GetSerializer("x-www-form-urlencoded")
+		} else {
+			serializer = serializers.GetSerializer(w.serializingType)
+		}
 		if nil != serializer {
 			err = serializer.ParseFrom(payload, v.Interface())
 		} else {

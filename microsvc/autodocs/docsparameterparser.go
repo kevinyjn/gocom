@@ -8,9 +8,12 @@ import (
 )
 
 // ParseParameters as list of ParameterInfo
-func ParseParameters(valueType reflect.Type, fieldTagName string) []ParameterInfo {
+func ParseParameters(valueType reflect.Type, fieldTagName string, paramPosition string) []ParameterInfo {
 	if valueType.Kind() == reflect.Ptr {
 		valueType = valueType.Elem()
+	}
+	if "" == paramPosition {
+		paramPosition = "body"
 	}
 	params := []ParameterInfo{}
 	numField := valueType.NumField()
@@ -18,6 +21,12 @@ func ParseParameters(valueType reflect.Type, fieldTagName string) []ParameterInf
 		ft := valueType.Field(i)
 		tagValue := ft.Tag.Get(fieldTagName)
 		if "" == tagValue {
+			if ft.Type.Kind() == reflect.Struct && ft.Type.Name() == ft.Name {
+				subParams := ParseParameters(ft.Type, fieldTagName, paramPosition)
+				for _, subParam := range subParams {
+					params = append(params, subParam)
+				}
+			}
 			continue
 		}
 		tagValues := strings.Split(tagValue, ",")
@@ -76,9 +85,17 @@ func ParseParameters(valueType reflect.Type, fieldTagName string) []ParameterInf
 			Type:        fieldType,
 			Name:        fieldName,
 			Description: fieldDescription,
-			In:          "body",
+			In:          paramPosition,
 			Required:    isRequired,
 			Format:      fieldFormat,
+		}
+
+		if "object" == fieldType {
+			// nestedParams := ParseParameters(ft.Type, fieldTagName, paramPosition)
+			pi.Schema = &DefinitionInfo{
+				Type:       fieldType,
+				Properties: ParseResponseParameters(ft.Type, fieldTagName, paramPosition),
+			}
 		}
 
 		params = append(params, pi)
@@ -86,10 +103,10 @@ func ParseParameters(valueType reflect.Type, fieldTagName string) []ParameterInf
 	return params
 }
 
-// ParseParameters as list of ParameterInfo
-func ParseResponseParameters(valueType reflect.Type, fieldTagName string) map[string]PropertyInfo {
+// ParseResponseParameters as list of ParameterInfo
+func ParseResponseParameters(valueType reflect.Type, fieldTagName string, paramPosition string) map[string]PropertyInfo {
 	properties := map[string]PropertyInfo{}
-	params := ParseParameters(valueType, fieldTagName)
+	params := ParseParameters(valueType, fieldTagName, paramPosition)
 	for _, param := range params {
 		properties[param.Name] = PropertyInfo{
 			Type:        param.Type,
