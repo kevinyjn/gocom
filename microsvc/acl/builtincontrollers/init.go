@@ -1,6 +1,8 @@
 package builtincontrollers
 
-import "github.com/kevinyjn/gocom/microsvc"
+import (
+	"github.com/kevinyjn/gocom/microsvc"
+)
 
 // GetControllers in current package
 func GetControllers() []microsvc.Controller {

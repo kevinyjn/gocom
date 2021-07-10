@@ -26,7 +26,7 @@ func TestBuiltinRBAC(t *testing.T) {
 	module := builtinmodels.Module{}
 	roleModle := builtinmodels.RoleModuleRelation{}
 	userRole := builtinmodels.UserRoleRelation{}
-	passwdHash, err := acl.GeneratePassword("000000")
+	passwdHash, err := builtinmodels.GeneratePassword("000000")
 	testingutil.AssertNil(t, err, "GeneratePassword error")
 	count, err := user.InsertMany([]interface{}{
 		&builtinmodels.User{Name: "user1", HashedPassword: base64.StdEncoding.EncodeToString(passwdHash)},

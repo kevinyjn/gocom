@@ -16,6 +16,24 @@ func ParseParameters(valueType reflect.Type, fieldTagName string, paramPosition 
 		paramPosition = "body"
 	}
 	params := []ParameterInfo{}
+	if valueType.Kind() == reflect.Slice {
+		valueTypeElem := valueType.Elem()
+		if valueTypeElem.Kind() == reflect.Struct {
+			pi := ParameterInfo{
+				Type:        "array",
+				Name:        valueTypeElem.Name(),
+				Description: "",
+				In:          paramPosition,
+				Schema: &DefinitionInfo{
+					Type:       "object",
+					Properties: ParseResponseParameters(valueTypeElem, fieldTagName, paramPosition),
+				},
+			}
+
+			params = append(params, pi)
+		}
+		return params
+	}
 	numField := valueType.NumField()
 	for i := 0; i < numField; i++ {
 		ft := valueType.Field(i)

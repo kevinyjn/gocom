@@ -148,12 +148,6 @@ func validateSignature(ctx iris.Context, signValue string) error {
 	return err
 }
 
-// GeneratePassword 将根据输入密码生成哈希密码
-// 用户的输入
-func GeneratePassword(userPassword string) ([]byte, error) {
-	return bcrypt.GenerateFromPassword([]byte(userPassword), bcrypt.DefaultCost)
-}
-
 // ValidatePassword 将检查密码是否匹配
 func ValidatePassword(userPassword string, hashed []byte) (bool, error) {
 	if err := bcrypt.CompareHashAndPassword(hashed, []byte(userPassword)); err != nil {

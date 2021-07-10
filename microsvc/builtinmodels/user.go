@@ -6,6 +6,7 @@ import (
 
 	"github.com/kevinyjn/gocom/orm/rdbms"
 	"github.com/kevinyjn/gocom/orm/rdbms/behaviors"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserModel interface
@@ -133,5 +134,32 @@ func (m *User) FindByName(name string) (UserModel, error) {
 
 // VerifyPassword to user password
 func (m *User) VerifyPassword(passwordOrHash string) bool {
-	return m.HashedPassword == passwordOrHash
+	err := bcrypt.CompareHashAndPassword(m.GetPasswordHash(), []byte(passwordOrHash))
+	if nil == err {
+		return true
+	}
+	// if passwordOrHash == m.HashedPassword {
+	// 	return true
+	// }
+	// passwordHash, err := GenerateHashedPassword(passwordOrHash)
+	// if nil == err && passwordHash == m.HashedPassword {
+	// 	return true
+	// }
+	return false
+}
+
+// GeneratePassword 将根据输入密码生成哈希密码
+// 用户的输入
+func GeneratePassword(userPassword string) ([]byte, error) {
+	return bcrypt.GenerateFromPassword([]byte(userPassword), bcrypt.DefaultCost)
+}
+
+// GenerateHashedPassword 将根据输入密码生成哈希密码
+// 用户的输入
+func GenerateHashedPassword(userPassword string) (string, error) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(userPassword), bcrypt.DefaultCost)
+	if nil != err {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(passwordHash), nil
 }

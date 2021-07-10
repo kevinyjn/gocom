@@ -33,8 +33,8 @@ func (p *PaginationParam) GetPageSize() int {
 
 // SortingParam sorting parameter
 type SortingParam struct {
-	Sort  string `json:"sort" form:"sort"`
-	Order string `json:"sortOrder" form:"sortOrder"`
+	Sort  string `json:"sort" form:"sort" validate:"optional" label:"排序字段"`
+	Order string `json:"sortOrder" form:"sortOrder" validate:"optional" label:"排序顺序"`
 }
 
 // ListQueryParam list query parameter
@@ -156,4 +156,30 @@ type UserQueryParam struct {
 type UserListQueryResponse struct {
 	ListQueryResponse
 	Items []*builtinmodels.User `json:"items" label:"数据"`
+}
+
+// LoginParam form data
+type LoginParam struct {
+	Name     string `json:"name" form:"name" validate:"required" label:"名称"`
+	Password string `json:"password" form:"password" validate:"required" label:"密码"`
+}
+
+// UserRoleRelationParam form data
+type UserRoleRelationParam struct {
+	UserID   int64   `json:"user_id" form:"user_id" validate:"required" label:"用户ID"`
+	RoleIDs  []int64 `json:"role_ids" form:"role_ids" validate:"optional" label:"角色ID列表"`
+	SystemID string  `json:"system_id" form:"system_id" validate:"optional" label:"系统编号"`
+}
+
+// RoleModuleRelationParam form data
+type RoleModuleRelationParam struct {
+	RoleID    int64   `json:"role_id" form:"role_id" validate:"required" label:"角色ID"`
+	ModuleIDs []int64 `json:"module_ids" form:"module_ids" validate:"optional" label:"模块ID列表"`
+	SystemID  string  `json:"system_id" form:"system_id" validate:"optional" label:"系统编号"`
+}
+
+// RelationsResponse response
+type RelationsResponse struct {
+	Adds    []int64 `json:"adds" label:"新增的ID"`
+	Deletes []int64 `json:"deletes" label:"移除的ID"`
 }

@@ -3,15 +3,13 @@ package main
 import (
 	"fmt"
 
+	"github.com/kataras/iris"
+	"github.com/kevinyjn/gocom/_examples/microservicedemo/controllers"
 	"github.com/kevinyjn/gocom/application"
 	"github.com/kevinyjn/gocom/config"
 	"github.com/kevinyjn/gocom/healthz"
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq"
-
-	"github.com/kataras/iris"
-
-	"github.com/kevinyjn/gocom/_examples/microservicedemo/controllers"
 )
 
 func main() {

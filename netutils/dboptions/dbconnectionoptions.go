@@ -49,6 +49,7 @@ type DBConnectionPoolOptions struct {
 	MaxTotalConnections int    `property:"Max Total Connections,default:8" validate:"required"`
 	SSHTunnelDSN        string `property:"SSH Tunnel DSN"`
 	sshTunnel           *sshtunnel.TunnelForwarder
+	connectionParams    map[string]string
 }
 
 // DBConnectionData formatted connection information
@@ -191,9 +192,23 @@ func (o *DBConnectionPoolOptions) parseCommonDSN(dsn string) error {
 			o.Password = slices[1]
 		}
 	}
+	o.connectionParams = map[string]string{}
 	if strings.Contains(hostText, "/") {
 		slices = strings.SplitN(hostText, "/", 2)
-		o.Database = strings.TrimRight(slices[1], " ;&?,")
+		o.Database = strings.TrimRight(slices[1], " ")
+		if strings.Contains(slices[1], "?") {
+			dbSlices := strings.SplitN(slices[1], "?", 2)
+			o.Database = strings.Trim(dbSlices[0], " ")
+			paramsParts := strings.Split(dbSlices[1], "&")
+			for _, paramsEle := range paramsParts {
+				paramSlices := strings.SplitN(paramsEle, "=", 2)
+				if len(paramSlices) > 1 {
+					o.connectionParams[utils.URLDecode(paramSlices[0])] = utils.URLDecode(paramSlices[1])
+				} else {
+					o.connectionParams[utils.URLDecode(paramSlices[0])] = ""
+				}
+			}
+		}
 	} else if strings.Contains(hostText, ";") {
 		slices = strings.SplitN(hostText, ";", 2)
 		slices2 := strings.Split(slices[1], ";")
@@ -276,8 +291,20 @@ func (o *DBConnectionPoolOptions) GetConnectionData() (DBConnectionData, error) 
 		break
 	case EnginePostgres, EngineCockroachDB:
 		connData.Driver = "postgres"
-		connData.ConnString = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s", dbHost, dbPort, o.User, o.Password, o.Database)
-		connData.ConnDescription = fmt.Sprintf("postgres://%s:%s@%s:%d/%s", o.User, strings.Repeat("*", len(o.Password)), o.Host, o.Port, o.Database)
+		exParams := ""
+		descripExParams := ""
+		if o.connectionParams != nil {
+			for k, v := range o.connectionParams {
+				exParams = exParams + fmt.Sprintf(" %s=%s", k, v)
+				sep2 := "&"
+				if "" == descripExParams {
+					sep2 = "?"
+				}
+				descripExParams = descripExParams + fmt.Sprintf("%s%s=%s", sep2, k, utils.URLEncode(v))
+			}
+		}
+		connData.ConnString = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s%s", dbHost, dbPort, o.User, o.Password, o.Database, exParams)
+		connData.ConnDescription = fmt.Sprintf("postgres://%s:%s@%s:%d/%s%s", o.User, strings.Repeat("*", len(o.Password)), o.Host, o.Port, o.Database, descripExParams)
 		break
 	case EngineSQLite:
 		connData.Driver = "sqlite3"

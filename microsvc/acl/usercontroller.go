@@ -3,6 +3,11 @@ package acl
 import (
 	"time"
 
+	"github.com/kevinyjn/gocom/utils"
+
+	"github.com/kevinyjn/gocom/config/results"
+	"github.com/kevinyjn/gocom/logger"
+
 	"github.com/kataras/iris"
 	"github.com/kataras/iris/core/router"
 	"github.com/kataras/iris/sessions"
@@ -39,9 +44,25 @@ func (c *UserController) IsLoggedIn(ctx iris.Context) bool {
 	return c.CurrentUserID(ctx) != ""
 }
 
-// Logout user
-func (c *UserController) Logout(ctx iris.Context) {
-	c.Session(ctx).Destroy()
+// Session get session by context
+func (c *UserController) Session(ctx iris.Context) *sessions.Session {
+	return c.SessionManager.Start((ctx))
+}
+
+// PushUID on user login
+func (c *UserController) PushUID(ctx iris.Context, uid string) {
+	c.Session(ctx).Set(userIDKey, uid)
+}
+
+// PushAppID on user login
+func (c *UserController) PushAppID(ctx iris.Context, appID string) {
+	c.Session(ctx).Set(appIDKey, appID)
+}
+
+// CurrentUserAppID logined with session
+func (c *UserController) CurrentUserAppID(ctx iris.Context) string {
+	appID := c.Session(ctx).GetStringDefault(appIDKey, "")
+	return appID
 }
 
 // Init with iris application
@@ -71,28 +92,69 @@ func (c *UserController) Init(app router.Party) {
 	// c.Service = NewUserService(repo)
 	c.SessionManager = sessions.New(sessions.Config{
 		Cookie:  "sessioncookiename",
-		Expires: 24 * time.Hour,
+		Expires: time.Duration(SessionExpireHours) * time.Hour,
 	})
 	c.initialized = true
+
+	app.Post(BaseRouteUsers+RouteUserSignin, c.Signin)
+	app.Get(BaseRouteUsers+RouteUserSignout, c.Signout)
 }
 
-// Session get session by context
-func (c *UserController) Session(ctx iris.Context) *sessions.Session {
-	return c.SessionManager.Start((ctx))
+// Signout user
+func (c *UserController) Signout(ctx iris.Context) {
+	result := results.NewResultObject()
+	if c.IsLoggedIn(ctx) {
+		c.Session(ctx).Destroy()
+		result.Code = results.OK
+		result.Message = "Success"
+	} else {
+		result.Code = results.NotLogin
+		result.Message = "Not login"
+	}
+	ctx.WriteString(result.Encode())
 }
 
-// PushUID on user login
-func (c *UserController) PushUID(ctx iris.Context, uid string) {
-	c.Session(ctx).Set(userIDKey, uid)
-}
+// Signin user
+func (c *UserController) Signin(ctx iris.Context) {
+	result := results.NewResultObject()
+	for results.OK != result.Code {
+		param := LoginParam{}
+		err := ctx.ReadJSON(&param)
+		if nil != err {
+			logger.Error.Printf("user login while parsing user request body as json failed with error:%v", err)
+			result.Code = results.InvalidInput
+			result.Message = err.Error()
+			break
+		}
+		if nil == UserVerifyManager {
+			logger.Error.Printf("user %s login while user verify manager were not configured", param.Name)
+			result.Code = results.InnerError
+			result.Message = "User verify manager were not configured"
+			break
+		}
 
-// PushAppID on user login
-func (c *UserController) PushAppID(ctx iris.Context, appID string) {
-	c.Session(ctx).Set(appIDKey, appID)
-}
+		remoteIP := utils.GetRemoteAddress(ctx.Request())
+		// passwordHash, err := builtinmodels.GenerateHashedPassword(param.Password)
+		// if nil != err {
+		// 	logger.Error.Printf("login user:%s while process inputs password:%s failed with error:%v", param.Name, param.Password, err)
+		// 	result.Code = results.InvalidInput
+		// 	result.Message = err.Error()
+		// 	break
+		// }
+		u, err := UserVerifyManager.VerifyUser(param.Name, param.Password, remoteIP)
+		if nil != err {
+			logger.Error.Printf("login user:%s while validate password:%s failed with error:%v", param.Name, param.Password, err)
+			result.Code = results.DataNotExists
+			result.Message = err.Error()
+			break
+		}
 
-// CurrentUserAppID logined with session
-func (c *UserController) CurrentUserAppID(ctx iris.Context) string {
-	appID := c.Session(ctx).GetStringDefault(appIDKey, "")
-	return appID
+		c.PushUID(ctx, u.GetUserID())
+
+		result.Code = results.OK
+		result.Message = "Success"
+		result.Data = u
+		break
+	}
+	ctx.WriteString(result.Encode())
 }

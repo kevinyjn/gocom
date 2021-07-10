@@ -184,3 +184,91 @@ func (c *roleController) PostDelete(param IDParam) (*RoleResponse, microsvc.Hand
 	}
 	return response, handlerErr
 }
+
+// PostRelationModules : set role related modules
+func (c *roleController) PostRelationModules(param RoleModuleRelationParam) (RelationsResponse, microsvc.HandlerError) {
+	var handlerErr microsvc.HandlerError
+	var response RelationsResponse
+	for {
+		if 0 >= param.RoleID {
+			logger.Warning.Printf("set role modules failed while giving empty role primary key")
+			handlerErr = microsvc.NewHandlerError(results.InvalidInput, "Invalid input data")
+			break
+		}
+		user := builtinmodels.Role{ID: param.RoleID}
+		ok, err := user.Exists()
+		if false == ok {
+			logger.Error.Printf("set role:%d modules:%+v while the role does not exists error:%v", param.RoleID, param.ModuleIDs, err)
+			handlerErr = microsvc.NewHandlerError(results.DataNotExists, "User does not exists")
+			break
+		}
+
+		userRoles := builtinmodels.RoleModuleRelation{RoleID: param.RoleID}
+		rows, err := rdbms.GetInstance().FetchAll(&userRoles)
+		if nil != err {
+			logger.Error.Printf("set role:%d modules:%+v while fetch exists relations failed with error:%v", param.RoleID, param.ModuleIDs, err)
+			handlerErr = microsvc.NewHandlerError(results.DataNotExists, err.Error())
+			break
+		}
+
+		existsIDs := map[int64]*builtinmodels.RoleModuleRelation{}
+		if nil != rows {
+			for _, row := range rows {
+				ur := row.(*builtinmodels.RoleModuleRelation)
+				existsIDs[ur.ModuleID] = ur
+			}
+		}
+		rmModel := builtinmodels.RoleModuleRelation{}
+		addRecords := []interface{}{}
+		response.Adds = []int64{}
+		response.Deletes = []int64{}
+		if nil != param.ModuleIDs {
+			for _, id := range param.ModuleIDs {
+				if nil != existsIDs[id] {
+					delete(existsIDs, id)
+					continue
+				}
+				addRecords = append(addRecords, &builtinmodels.RoleModuleRelation{
+					RoleID:   param.RoleID,
+					ModuleID: id,
+					SystemID: param.SystemID,
+				})
+				response.Adds = append(response.Adds, id)
+			}
+		}
+
+		for _, rm := range existsIDs {
+			response.Deletes = append(response.Deletes, rm.ID)
+		}
+		if len(response.Deletes) > 0 {
+			eng, err := rdbms.GetInstance().GetDbEngine(&rmModel)
+			if nil != err {
+				logger.Error.Printf("set role:%d modules:%+v while get db engine failed with error:%v", param.RoleID, param.ModuleIDs, err)
+				handlerErr = microsvc.NewHandlerError(results.InnerError, err.Error())
+				break
+			}
+			count, err := eng.In("id", response.Deletes).Delete(&rmModel)
+			if nil != err {
+				logger.Error.Printf("set role:%d modules:%+v while delete old relations %+v failed with error:%v", param.RoleID, param.ModuleIDs, response.Deletes, err)
+				handlerErr = microsvc.NewHandlerError(results.InnerError, err.Error())
+				break
+			} else {
+				logger.Info.Printf("set role:%d modules:%+v deleted old relations %+v affected %d rows", param.RoleID, param.ModuleIDs, response.Deletes, count)
+			}
+		}
+
+		if len(addRecords) > 0 {
+			count, err := rmModel.InsertMany(addRecords)
+			if nil != err {
+				logger.Error.Printf("set role:%d modules:%+v while add new relations failed with error:%v", param.RoleID, param.ModuleIDs, err)
+				handlerErr = microsvc.NewHandlerError(results.InnerError, err.Error())
+				break
+			} else {
+				logger.Info.Printf("set role:%d modules:%+v add new relations affected %d rows", param.RoleID, param.ModuleIDs, count)
+			}
+		}
+		logger.Info.Printf("set role:%d modules:%+v succeed", param.RoleID, param.ModuleIDs)
+		break
+	}
+	return response, handlerErr
+}

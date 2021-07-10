@@ -15,6 +15,7 @@ type Role struct {
 	Code                        string `xorm:"'code' VARCHAR(45) notnull index" json:"code" form:"code"`
 	AppID                       string `xorm:"'app_id' VARCHAR(45) null index" json:"app_id" form:"app_id"`
 	SystemID                    string `xorm:"'system_id' VARCHAR(45) null index" json:"system_id" form:"system_id"`
+	Avatar                      string `xorm:"'avatar' VARCHAR(64) null" json:"avatar" form:"avatar"`
 	Remark                      string `xorm:"'remark' VARCHAR(255) null" json:"remark" form:"remark"`
 	behaviors.ModifyingBehavior `xorm:"extends"`
 	rdbms.Datasource            `xorm:"-" datasource:"default"`

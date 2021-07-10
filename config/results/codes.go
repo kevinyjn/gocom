@@ -22,6 +22,8 @@ const (
 	DataNotExists          = 705
 	NothingToDo            = 706
 	NotEmptyReferences     = 707
+	InvalidPassword        = 708
+	NotLogin               = 709
 	InvalidInput           = 1101
 	UnknownOrgnazationCode = 1102
 )

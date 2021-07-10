@@ -114,6 +114,7 @@ func getSwaggerPath() string {
 		if ok {
 			curDir := path.Dir(file)
 			swaggerPath = path.Join(curDir, "swagger")
+			logger.Info.Printf("Using builtin library swagger template path: %s", swaggerPath)
 		}
 	}
 	return swaggerPath
