@@ -1,54 +1,9 @@
 package builtincontrollers
 
-import "github.com/kevinyjn/gocom/microsvc/builtinmodels"
-
-// IDParam form data
-type IDParam struct {
-	ID int64 `json:"id" form:"id" validate:"optional" label:"ID"`
-}
-
-// PaginationParam pagination parameter
-type PaginationParam struct {
-	Page     int `json:"page" form:"page" validate:"optional" label:"页码"`
-	PageSize int `json:"pageSize" form:"pageSize" validate:"required" default:"20" label:"分页条数"`
-}
-
-// GetPageOffset offset for db offset query
-func (p *PaginationParam) GetPageOffset() int {
-	if p.Page > 0 {
-		return p.Page - 1
-	}
-	return 0
-}
-
-// GetPageSize page size for db limit query
-func (p *PaginationParam) GetPageSize() int {
-	if p.PageSize > 1000 {
-		return 1000
-	} else if p.PageSize <= 0 {
-		return 10
-	}
-	return p.PageSize
-}
-
-// SortingParam sorting parameter
-type SortingParam struct {
-	Sort  string `json:"sort" form:"sort" validate:"optional" label:"排序字段"`
-	Order string `json:"sortOrder" form:"sortOrder" validate:"optional" label:"排序顺序"`
-}
-
-// ListQueryParam list query parameter
-type ListQueryParam struct {
-	Pagination PaginationParam   `json:"pagination" form:"pagination" validate:"required" label:"分页"`
-	Sorter     *SortingParam     `json:"sorder" form:"sorter" validate:"optional" label:"排序"`
-	Filters    map[string]string `json:"filter" form:"filter" validate:"optional" label:"筛选"`
-}
-
-// ListQueryResponse list query response data
-type ListQueryResponse struct {
-	Total int64       `json:"total" validate:"required" label:"总计"`
-	Items interface{} `json:"items" label:"数据"`
-}
+import (
+	"github.com/kevinyjn/gocom/microsvc/builtinmodels"
+	"github.com/kevinyjn/gocom/microsvc/parameters"
+)
 
 // RoleParam form data
 type RoleParam struct {
@@ -90,8 +45,8 @@ type RoleResponse struct {
 
 // RoleListQueryParam role list query
 type RoleListQueryParam struct {
-	ListQueryParam
-	Filters *RoleQueryParam `json:"filter" form:"filter" validate:"optional" label:"筛选"`
+	parameters.ListQueryParam
+	RoleQueryParam
 }
 
 // RoleQueryParam query filter fields of role
@@ -104,7 +59,7 @@ type RoleQueryParam struct {
 
 // RoleListQueryResponse role list query response data
 type RoleListQueryResponse struct {
-	ListQueryResponse
+	parameters.ListQueryResponse
 	Items []*builtinmodels.Role `json:"items" label:"数据"`
 }
 
@@ -115,8 +70,8 @@ type ModuleResponse struct {
 
 // ModuleListQueryParam role list query
 type ModuleListQueryParam struct {
-	ListQueryParam
-	Filters *ModuleQueryParam `json:"filter" form:"filter" validate:"optional" label:"筛选"`
+	parameters.ListQueryParam
+	ModuleQueryParam
 }
 
 // ModuleQueryParam query filter fields of role
@@ -125,12 +80,18 @@ type ModuleQueryParam struct {
 	Name     string `json:"name" form:"name" validate:"optional" label:"名称"`
 	Code     string `json:"code" form:"code" validate:"optional" label:"编码"`
 	SystemID string `json:"system_id" form:"system_id" validate:"optional" label:"所属系统"`
+	ParentID int64  `json:"parent_id" form:"parent_id" validate:"optional" label:"父级节点"`
 }
 
-// ModuleListQueryResponse role list query response data
+// ModuleListQueryResponse module list query response data
 type ModuleListQueryResponse struct {
-	ListQueryResponse
+	parameters.ListQueryResponse
 	Items []*builtinmodels.Module `json:"items" label:"数据"`
+}
+
+// ModuleTreeDataResponse module tree data response data
+type ModuleTreeDataResponse struct {
+	Items []parameters.TreeData `json:"items" label:"数据"`
 }
 
 // UserResponse response parameter
@@ -140,8 +101,8 @@ type UserResponse struct {
 
 // UserListQueryParam role list query
 type UserListQueryParam struct {
-	ListQueryParam
-	Filters *UserQueryParam `json:"filter" form:"filter" validate:"optional" label:"筛选"`
+	parameters.ListQueryParam
+	UserQueryParam
 }
 
 // UserQueryParam query filter fields of role
@@ -154,7 +115,7 @@ type UserQueryParam struct {
 
 // UserListQueryResponse role list query response data
 type UserListQueryResponse struct {
-	ListQueryResponse
+	parameters.ListQueryResponse
 	Items []*builtinmodels.User `json:"items" label:"数据"`
 }
 

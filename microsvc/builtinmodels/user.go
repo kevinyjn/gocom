@@ -33,6 +33,7 @@ type User struct {
 	HashedPassword              string `xorm:"'passwd_hash' VARCHAR(64)" json:"-" form:"-"`
 	behaviors.ModifyingBehavior `xorm:"extends"`
 	rdbms.Datasource            `xorm:"-" datasource:"default"`
+	Roles                       []NameInfo `xorm:"-" json:"roles"`
 }
 
 // IsValid 可以做一些非常简单的“低级”数据验证

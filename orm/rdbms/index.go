@@ -227,25 +227,25 @@ func (dae *DataAccessEngine) ensureDbEngine(dbDatasourceName string) (*xorm.Engi
 // FetchAll fetch all data object from database on conditionBean
 // Nodes: there would be a max {MaxArrayCachingDurationSeconds} seconds non-syncronized to db data
 // in case inserted some records in rows that conditionBean specifies.
-func (dae *DataAccessEngine) FetchAll(condiBeans interface{}) ([]interface{}, error) {
+func (dae *DataAccessEngine) FetchAll(condiBeans interface{}, customConds ...map[string]interface{}) ([]interface{}, error) {
 	records := []interface{}{}
-	structureName, orm, err := dae.getDbEngineWithStructureName(condiBeans)
+	_, orm, err := dae.getDbEngineWithStructureName(condiBeans)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
 	}
-	cacheGroup := getCaches().group(structureName)
-	_, ok := cacheGroup.getArray(condiBeans, &records, 0, 0)
-	if true == ok {
-		logger.Trace.Printf("Fetching records by table:%s on condition:%+v from cache hitted", getTableName(condiBeans), condiBeans)
-		return records, nil
-	}
-	err = queryAll(orm, condiBeans, &records, 0, 0)
+	// cacheGroup := getCaches().group(structureName)
+	// _, ok := cacheGroup.getArray(condiBeans, &records, 0, 0)
+	// if true == ok {
+	// 	logger.Trace.Printf("Fetching records by table:%s on condition:%+v from cache hitted", getTableName(condiBeans), condiBeans)
+	// 	return records, nil
+	// }
+	err = queryAll(orm, condiBeans, &records, 0, 0, customConds...)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%+v failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
 	}
-	cacheGroup.setArray(condiBeans, records, 0, 0)
+	// cacheGroup.setArray(condiBeans, records, 0, 0)
 	return records, nil
 }
 
@@ -254,29 +254,29 @@ func (dae *DataAccessEngine) FetchAll(condiBeans interface{}) ([]interface{}, er
 // in case inserted some records in rows that conditionBean specifies. while, this case would not
 // be commonly comes out because that the new record would be inserted at the tail of rows in many
 // databases
-func (dae *DataAccessEngine) FetchRecords(condiBeans interface{}, limit, offset int) ([]interface{}, error) {
+func (dae *DataAccessEngine) FetchRecords(condiBeans interface{}, limit, offset int, customConds ...map[string]interface{}) ([]interface{}, error) {
 	records := []interface{}{}
 	if 0 >= limit || 0 > offset {
 		logger.Error.Printf("Fetching records by table:%s on condition:%+v with limit:%d offset:%d while limit should greater than 0 and offset should not less than 0", getTableName(condiBeans), condiBeans, limit, offset)
 		return records, errors.New("limit should greater than 0 and offset should not less than 0")
 	}
-	structureName, orm, err := dae.getDbEngineWithStructureName(condiBeans)
+	_, orm, err := dae.getDbEngineWithStructureName(condiBeans)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
 	}
-	cacheGroup := getCaches().group(structureName)
-	_, ok := cacheGroup.getArray(condiBeans, &records, limit, offset)
-	if true == ok {
-		logger.Trace.Printf("Fetching records by table:%s on condition:%+v from cache hitted", getTableName(condiBeans), condiBeans)
-		return records, nil
-	}
-	err = queryAll(orm, condiBeans, &records, limit, offset)
+	// cacheGroup := getCaches().group(structureName)
+	// _, ok := cacheGroup.getArray(condiBeans, &records, limit, offset)
+	// if true == ok {
+	// 	logger.Trace.Printf("Fetching records by table:%s on condition:%+v from cache hitted", getTableName(condiBeans), condiBeans)
+	// 	return records, nil
+	// }
+	err = queryAll(orm, condiBeans, &records, limit, offset, customConds...)
 	if nil != err {
 		logger.Error.Printf("Fetching records by table:%s on condition:%+v failed with error:%v", getTableName(condiBeans), condiBeans, err)
 		return records, err
 	}
-	cacheGroup.setArray(condiBeans, records, limit, offset)
+	// cacheGroup.setArray(condiBeans, records, limit, offset)
 	return records, nil
 }
 
@@ -286,7 +286,7 @@ func (dae *DataAccessEngine) FetchRecords(condiBeans interface{}, limit, offset 
 // be commonly comes out because that the new record would be inserted at the tail of rows in many
 // databases
 // returns total count of records in database by condiBeans and error object if gots error
-func (dae *DataAccessEngine) FetchRecordsAndCountTotal(condiBeans interface{}, limit, offset int, results interface{}) (int64, error) {
+func (dae *DataAccessEngine) FetchRecordsAndCountTotal(condiBeans interface{}, limit, offset int, results interface{}, customConds ...map[string]interface{}) (int64, error) {
 	resultsValue := reflect.ValueOf(results)
 	if resultsValue.Type().Kind() != reflect.Ptr {
 		return 0, fmt.Errorf("The results parameter should not be non-pointer array")
@@ -294,11 +294,11 @@ func (dae *DataAccessEngine) FetchRecordsAndCountTotal(condiBeans interface{}, l
 	if resultsValue.Elem().Type().Kind() != reflect.Slice {
 		return 0, fmt.Errorf("The results parameter were not array type")
 	}
-	count, err := dae.Count(condiBeans)
+	count, err := dae.Count(condiBeans, customConds...)
 	if nil != err {
 		return 0, err
 	}
-	records, err := dae.FetchRecords(condiBeans, limit, offset)
+	records, err := dae.FetchRecords(condiBeans, limit, offset, customConds...)
 	if nil != err {
 		return 0, err
 	}
@@ -319,30 +319,31 @@ func (dae *DataAccessEngine) FetchRecordsAndCountTotal(condiBeans interface{}, l
 
 // FetchOne Get retrieve one record from table, bean's non-empty fields are conditions.
 // The bean should be a pointer to a struct
-func (dae *DataAccessEngine) FetchOne(bean interface{}) (bool, error) {
-	structureName, orm, err := dae.getDbEngineWithStructureName(bean)
+func (dae *DataAccessEngine) FetchOne(bean interface{}, customConds ...map[string]interface{}) (bool, error) {
+	_, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Fetching record by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return false, err
 	}
-	cacheGroup := getCaches().group(structureName)
-	cachingBean, cachingKey, ok := cacheGroup.get(bean, false)
-	if ok {
-		err = utils.DeeplyCopyObject(cachingBean, bean)
-		if nil == err {
-			logger.Trace.Printf("Fetching record by table:%s on condition:%+v from cache hitted", getTableName(bean), cachingKey)
-			return true, nil
-		}
-		logger.Error.Printf("Fetching record by table:%s on condition:%+v while copying from cached data failed with error:%v", getTableName(bean), bean, err)
-	}
-	condiBean := reflect.New(reflect.ValueOf(bean).Elem().Type()).Interface()
-	utils.DeeplyCopyObject(bean, condiBean)
-	has, err := orm.Get(bean)
+	// cacheGroup := getCaches().group(structureName)
+	// cachingBean, cachingKey, ok := cacheGroup.get(bean, false)
+	// if ok {
+	// 	err = utils.DeeplyCopyObject(cachingBean, bean)
+	// 	if nil == err {
+	// 		logger.Trace.Printf("Fetching record by table:%s on condition:%+v from cache hitted", getTableName(bean), cachingKey)
+	// 		return true, nil
+	// 	}
+	// 	logger.Error.Printf("Fetching record by table:%s on condition:%+v while copying from cached data failed with error:%v", getTableName(bean), bean, err)
+	// }
+	// condiBean := reflect.New(reflect.ValueOf(bean).Elem().Type()).Interface()
+	// utils.DeeplyCopyObject(bean, condiBean)
+	s := prepareDbSession(orm, customConds...)
+	has, err := s.Get(bean)
 	if nil != err {
 		logger.Error.Printf("Fetching record by table:%s on condition:%+v failed with error:%v", getTableName(bean), bean, err)
 	} else if has {
-		pkCondiBean, _ := dae.getPkConditionBean(orm, structureName, bean)
-		cacheGroup.set(bean, condiBean, pkCondiBean)
+		// pkCondiBean, _ := dae.getPkConditionBean(orm, structureName, bean)
+		// cacheGroup.set(bean, condiBean, pkCondiBean)
 	} else {
 		logger.Info.Printf("Fetching record by table:%s on condition:%+v while there is no such record", getTableName(bean), bean)
 	}
@@ -374,14 +375,14 @@ func (dae *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
 		}
 	}
 	if ok {
-		cacheGroup = getCaches().group(structureName)
-		cachingBean, _, cached := cacheGroup.get(condiBean, false)
-		if cached {
-			if utils.IsObjectEquals(cachingBean, bean) {
-				logger.Info.Printf("Saving record for condition:%+v while the object not changed.", condiBean)
-				return false, nil
-			}
-		}
+		// cacheGroup = getCaches().group(structureName)
+		// cachingBean, _, cached := cacheGroup.get(condiBean, false)
+		// if cached {
+		// 	if utils.IsObjectEquals(cachingBean, bean) {
+		// 		logger.Info.Printf("Saving record for condition:%+v while the object not changed.", condiBean)
+		// 		return false, nil
+		// 	}
+		// }
 		ok, err = orm.Exist(condiBean)
 		if nil != err {
 			logger.Error.Printf("Saving record:%v while check table pk:%+v exists while got error:%v", bean, condiBean, err)
@@ -421,18 +422,19 @@ func (dae *DataAccessEngine) SaveOne(bean interface{}) (bool, error) {
 
 // Exists check record exists from table, bean's non-empty fields are conditions.
 // The bean should be a pointer to a struct
-func (dae *DataAccessEngine) Exists(bean interface{}) (bool, error) {
-	structureName, orm, err := dae.getDbEngineWithStructureName(bean)
+func (dae *DataAccessEngine) Exists(bean interface{}, customConds ...map[string]interface{}) (bool, error) {
+	_, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Fetching record by table:%s on condition:%v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return false, err
 	}
-	cacheGroup := getCaches().group(structureName)
-	_, _, ok := cacheGroup.get(bean, false)
-	if ok {
-		return true, nil
-	}
-	ok, err = orm.Exist(bean)
+	// cacheGroup := getCaches().group(structureName)
+	// _, _, ok := cacheGroup.get(bean, false)
+	// if ok {
+	// 	return true, nil
+	// }
+	s := prepareDbSession(orm, customConds...)
+	ok, err := s.Exist(bean)
 	if nil != err {
 		logger.Error.Printf("Checking record:%+v exists got error:%v", bean, err)
 		return false, err
@@ -441,13 +443,14 @@ func (dae *DataAccessEngine) Exists(bean interface{}) (bool, error) {
 }
 
 // Count record counts from table, bean's non-empty fields are conditions.
-func (dae *DataAccessEngine) Count(bean interface{}) (int64, error) {
+func (dae *DataAccessEngine) Count(bean interface{}, customConds ...map[string]interface{}) (int64, error) {
 	_, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Counting record by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return 0, err
 	}
-	counts, err := orm.Count(bean)
+	s := prepareDbSession(orm, customConds...)
+	counts, err := s.Count(bean)
 	if nil != err {
 		logger.Error.Printf("Counting record by table:%s on condition:%+v failed with error:%v", getTableName(bean), bean, err)
 	}
@@ -530,7 +533,7 @@ func (dae *DataAccessEngine) InsertMulti(beans []interface{}) (int64, error) {
 
 // Delete record from table, bean's non-empty fields are conditions.
 func (dae *DataAccessEngine) Delete(bean interface{}) (int64, error) {
-	structureName, orm, err := dae.getDbEngineWithStructureName(bean)
+	_, orm, err := dae.getDbEngineWithStructureName(bean)
 	if nil != err {
 		logger.Error.Printf("Deleting record by table:%s on condition:%+v while get database engine failed with error:%v", getTableName(bean), bean, err)
 		return 0, err
@@ -541,7 +544,7 @@ func (dae *DataAccessEngine) Delete(bean interface{}) (int64, error) {
 		defer session.Close()
 	}
 	affected, err := session.Delete(bean)
-	getCaches().group(structureName).del(bean)
+	// getCaches().group(structureName).del(bean)
 	if nil != err {
 		logger.Error.Printf("Deleting record by table:%s on condition:%+v failed with error:%v", getTableName(bean), bean, err)
 	}
@@ -630,6 +633,47 @@ func getTableName(beanOrTableName interface{}) string {
 func (dae *DataAccessEngine) GetDbEngine(beanOrTableName interface{}) (*xorm.Engine, error) {
 	_, orm, err := dae.getDbEngineWithStructureName(beanOrTableName)
 	return orm, err
+}
+
+// Table sepcify table session of db engine
+func (dae *DataAccessEngine) Table(beanOrTableName interface{}) (*xorm.Session, error) {
+	_, orm, err := dae.getDbEngineWithStructureName(beanOrTableName)
+	if nil != err {
+		return nil, err
+	}
+	return orm.Table(beanOrTableName), nil
+}
+
+// QueryRelationsAsMappedInterface query the relationship mapper includes data
+func (dae *DataAccessEngine) QueryRelationsAsMappedInterface(relationQuery RelationQuery, args ...interface{}) ([]map[string]interface{}, error) {
+	orm, err := dae.GetDbEngine(relationQuery.TargetTable)
+	if nil != err {
+		return nil, err
+	}
+	argc := len(args)
+	seps := make([]string, argc)
+	placeholder := GetSQLParamPlaceholderString(orm.DriverName())
+	for i := 0; i < argc; i++ {
+		seps[i] = placeholder
+	}
+	rows, err := orm.Table(relationQuery.TargetTable).Select(relationQuery.Select).
+		Join("INNER", relationQuery.RelationTable, fmt.Sprintf("%s.%s = %s.%s", relationQuery.RelationTable.TableName(), relationQuery.TargetRelationField, relationQuery.TargetTable.TableName(), relationQuery.TargetPrimaryKey)).
+		Where(fmt.Sprintf("%s.%s IN (%s)", relationQuery.RelationTable.TableName(), relationQuery.SelfRelationField, strings.Join(seps, ", ")), args...).
+		QueryInterface()
+	return rows, err
+}
+
+// QueryRelationData query the table relation data
+func (dae *DataAccessEngine) QueryRelationData(relationQuery RelationQuery, structRowParameterField string, structRowRelationsField string, structRows interface{}) ([]map[string]interface{}, error) {
+	if nil == structRows || "" == structRowParameterField || "" == structRowRelationsField {
+		return nil, fmt.Errorf("No argument specified")
+	}
+	args := organizeQueryParameters(structRowParameterField, structRows)
+	rows, err := dae.QueryRelationsAsMappedInterface(relationQuery, args...)
+	if nil != err {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func (dae *DataAccessEngine) getDbEngineWithStructureName(beanOrTableName interface{}) (string, *xorm.Engine, error) {
@@ -807,7 +851,7 @@ func formatPkConditionBeanX(structureName string, bean interface{}) (interface{}
 	return condiBean, err
 }
 
-func queryAll(orm *xorm.Engine, condiBeans interface{}, records *[]interface{}, limit, offset int) error {
+func queryAll(orm *xorm.Engine, condiBeans interface{}, records *[]interface{}, limit, offset int, customConds ...map[string]interface{}) error {
 	var typ = reflect.ValueOf(condiBeans).Elem().Type()
 	var rows *xorm.Rows
 	var err error
@@ -815,10 +859,11 @@ func queryAll(orm *xorm.Engine, condiBeans interface{}, records *[]interface{}, 
 		logger.Error.Printf("Fetching records by table:%s on condition:%v with limit:%d offset:%d while limit and offset should not less than 0", getTableName(condiBeans), condiBeans, limit, offset)
 		return errors.New("limit and offset should not less than 0")
 	}
+	s := prepareDbSession(orm, customConds...)
 	if 0 < limit {
-		rows, err = orm.Limit(limit, offset).Rows(condiBeans)
+		rows, err = s.Limit(limit, offset).Rows(condiBeans)
 	} else {
-		rows, err = orm.Rows(condiBeans)
+		rows, err = s.Rows(condiBeans)
 	}
 	if nil != err {
 		logger.Error.Printf("Query all results by table %v failed with error:%v", condiBeans, err)
@@ -837,12 +882,87 @@ func queryAll(orm *xorm.Engine, condiBeans interface{}, records *[]interface{}, 
 	return err
 }
 
-// // nowTime return current time
-// func (engine *xorm.Engine) nowTime(col *schemas.Column) (interface{}, time.Time) {
-// 	t := time.Now()
-// 	var tz = engine.DatabaseTZ
-// 	if !col.DisableTimeZone && col.TimeZone != nil {
-// 		tz = col.TimeZone
-// 	}
-// 	return dialects.FormatTime(engine.dialect, col.SQLType.Name, t.In(tz)), t.In(engine.TZLocation)
-// }
+func prepareDbSession(orm *xorm.Engine, args ...map[string]interface{}) xorm.Interface {
+	if nil == args || len(args) <= 0 {
+		return orm
+	}
+	var s xorm.Interface = orm
+	for _, c := range args {
+		s = s.Where(c)
+	}
+	return s
+}
+
+// GetSQLQuoteString get sql quote
+func GetSQLQuoteString(driverName string) string {
+	quote := "'"
+	switch driverName {
+	case "mysql":
+		quote = "`"
+		break
+	case "postgres":
+		quote = "\""
+		break
+	}
+	return quote
+}
+
+// GetSQLParamPlaceholderString get sql parameter placeholder
+func GetSQLParamPlaceholderString(driverName string) string {
+	quote := "?"
+	switch driverName {
+	case "postgres":
+		quote = "$"
+		break
+	}
+	return quote
+}
+
+func organizeQueryParameters(fieldName string, params interface{}) []interface{} {
+	pv := reflect.ValueOf(params)
+	if reflect.Ptr == pv.Type().Kind() {
+		pv = pv.Elem()
+	}
+	var argc int
+	if pv.Type().Kind() != reflect.Slice {
+		nv := []interface{}{params}
+		pv = reflect.ValueOf(nv)
+		argc = 1
+	} else {
+		argc = pv.Len()
+	}
+	argsMap := map[interface{}]bool{}
+	for i := 0; i < argc; i++ {
+		v := pv.Index(i)
+		if v.Type().Kind() == reflect.Ptr {
+			v = v.Elem()
+		}
+		switch v.Type().Kind() {
+		case reflect.Struct:
+			fv := v.FieldByName(fieldName)
+			if fv.IsValid() {
+				argsMap[fv.Interface()] = true
+			}
+			break
+		case reflect.Map:
+			mv, ok := v.Interface().(map[string]interface{})
+			if ok {
+				fv, ok := mv[fieldName]
+				if ok {
+					argsMap[fv] = true
+				}
+			}
+			break
+		case reflect.String, reflect.Int, reflect.Uint, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.Bool:
+			argsMap[v.Interface()] = true
+			break
+		}
+	}
+	args := make([]interface{}, len(argsMap))
+	i := 0
+	for k := range argsMap {
+		args[i] = k
+		i++
+	}
+	return args
+}

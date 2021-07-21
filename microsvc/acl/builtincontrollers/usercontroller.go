@@ -1,6 +1,7 @@
 package builtincontrollers
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/kataras/iris"
@@ -8,6 +9,7 @@ import (
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/microsvc"
 	"github.com/kevinyjn/gocom/microsvc/builtinmodels"
+	"github.com/kevinyjn/gocom/microsvc/parameters"
 	"github.com/kevinyjn/gocom/mq/mqenv"
 	"github.com/kevinyjn/gocom/orm/rdbms"
 	"github.com/kevinyjn/gocom/utils"
@@ -105,7 +107,7 @@ func (c *userController) GetCurrent(msg mqenv.MQConsumerMessage) (*builtinmodels
 // }
 
 // GetInfo : get user
-func (c *userController) GetInfo(param IDParam) (*builtinmodels.User, microsvc.HandlerError) {
+func (c *userController) GetInfo(param parameters.IDParam) (*builtinmodels.User, microsvc.HandlerError) {
 	var handlerErr microsvc.HandlerError
 	var response *builtinmodels.User
 	for {
@@ -137,13 +139,60 @@ func (c *userController) GetList(param UserListQueryParam) (UserListQueryRespons
 		if nil != param.Filters {
 			utils.FormDataCopyFields(param.Filters, &user, "json")
 		}
-		count, err := rdbms.GetInstance().FetchRecordsAndCountTotal(&user, param.Pagination.GetPageSize(), param.Pagination.GetPageOffset(), &response.Items)
+		count, err := rdbms.GetInstance().FetchRecordsAndCountTotal(&user, param.GetPageSize(), param.GetPageOffset(), &response.Items)
 		if nil != err {
 			logger.Error.Printf("get user list while fetch user records failed with error:%v", err)
 			handlerErr = microsvc.NewHandlerError(results.DataNotExists, err.Error())
 			break
 		}
 		response.Total = count
+		if nil != response.Items {
+			urr := builtinmodels.UserRoleRelation{}
+			role := builtinmodels.Role{}
+			roleRows, err := rdbms.GetInstance().QueryRelationData(rdbms.RelationQuery{
+				Select:              fmt.Sprintf("%s.user_id AS uid, %s.id AS id, %s.name AS name", urr.TableName(), role.TableName(), role.TableName()),
+				RelationTable:       &urr,
+				TargetTable:         &role,
+				SelfRelationField:   "user_id",
+				TargetRelationField: "role_id",
+				TargetPrimaryKey:    "id",
+			}, "ID", "Roles", response.Items)
+			if nil != err {
+				logger.Error.Printf("find user ralated role failed with error:%v", err)
+				break
+			}
+
+			roleNames := map[interface{}][]builtinmodels.NameInfo{}
+			ok := false
+			foundExists := false
+			for _, row := range roleRows {
+				uid := row["uid"]
+				id := row["id"]
+				name := utils.ToString(row["name"])
+				_, ok = roleNames[uid]
+				if ok {
+					foundExists = false
+					for _, o := range roleNames[uid] {
+						if o.ID == id {
+							foundExists = true
+							break
+						}
+					}
+					if false == foundExists {
+						roleNames[uid] = append(roleNames[uid], builtinmodels.NameInfo{ID: id, Name: name})
+					}
+				} else {
+					roleNames[uid] = []builtinmodels.NameInfo{builtinmodels.NameInfo{ID: id, Name: name}}
+				}
+			}
+
+			for _, o := range response.Items {
+				roles, ok := roleNames[o.ID]
+				if ok {
+					o.Roles = roles
+				}
+			}
+		}
 
 		break
 	}
@@ -234,7 +283,7 @@ func (c *userController) PostEdit(param UserParam) (*UserResponse, microsvc.Hand
 }
 
 // PostDelete : delete user
-func (c *userController) PostDelete(param IDParam) (*UserResponse, microsvc.HandlerError) {
+func (c *userController) PostDelete(param parameters.IDParam) (*UserResponse, microsvc.HandlerError) {
 	var handlerErr microsvc.HandlerError
 	var response *UserResponse
 	for {

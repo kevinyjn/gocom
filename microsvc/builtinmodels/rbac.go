@@ -3,6 +3,8 @@ package builtinmodels
 import (
 	"fmt"
 
+	"github.com/kevinyjn/gocom/microsvc/parameters"
+
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/orm/rdbms"
 	"github.com/kevinyjn/gocom/orm/rdbms/behaviors"
@@ -19,6 +21,7 @@ type Role struct {
 	Remark                      string `xorm:"'remark' VARCHAR(255) null" json:"remark" form:"remark"`
 	behaviors.ModifyingBehavior `xorm:"extends"`
 	rdbms.Datasource            `xorm:"-" datasource:"default"`
+	Modules                     []NameInfo `xorm:"-" json:"modules"`
 }
 
 // IsValid 可以做一些非常简单的“低级”数据验证
@@ -80,6 +83,7 @@ type Module struct {
 	Remark                      string `xorm:"'remark' VARCHAR(255) null" json:"remark" form:"remark"`
 	behaviors.ModifyingBehavior `xorm:"extends"`
 	rdbms.Datasource            `xorm:"-" datasource:"default"`
+	Children                    []parameters.TreeDataInterface `xorm:"-" json:"children" form:"-"`
 }
 
 // IsValid 可以做一些非常简单的“低级”数据验证
@@ -120,6 +124,21 @@ func (m *Module) Delete() (int64, error) {
 // InsertMany records
 func (m *Module) InsertMany(records []interface{}) (int64, error) {
 	return m.Datasource.Insert(records...)
+}
+
+// GetKey interface of tree node data
+func (m *Module) GetKey() interface{} {
+	return m.ID
+}
+
+// GetTitle interface of tree node data
+func (m *Module) GetTitle() string {
+	return m.Name
+}
+
+// SetChildren interface of tree node data
+func (m *Module) SetChildren(children []parameters.TreeDataInterface) {
+	m.Children = children
 }
 
 // FindAuthorizedModules by user id

@@ -1,10 +1,13 @@
 package builtincontrollers
 
 import (
+	"fmt"
+
 	"github.com/kevinyjn/gocom/config/results"
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/microsvc"
 	"github.com/kevinyjn/gocom/microsvc/builtinmodels"
+	"github.com/kevinyjn/gocom/microsvc/parameters"
 	"github.com/kevinyjn/gocom/orm/rdbms"
 	"github.com/kevinyjn/gocom/utils"
 )
@@ -18,7 +21,7 @@ type roleController struct {
 }
 
 // GetInfo : get role
-func (c *roleController) GetInfo(param IDParam) (*builtinmodels.Role, microsvc.HandlerError) {
+func (c *roleController) GetInfo(param parameters.IDParam) (*builtinmodels.Role, microsvc.HandlerError) {
 	var handlerErr microsvc.HandlerError
 	var response *builtinmodels.Role
 	for {
@@ -50,13 +53,60 @@ func (c *roleController) GetList(param RoleListQueryParam) (RoleListQueryRespons
 		if nil != param.Filters {
 			utils.FormDataCopyFields(param.Filters, &role, "json")
 		}
-		count, err := rdbms.GetInstance().FetchRecordsAndCountTotal(&role, param.Pagination.GetPageSize(), param.Pagination.GetPageOffset(), &response.Items)
+		count, err := rdbms.GetInstance().FetchRecordsAndCountTotal(&role, param.GetPageSize(), param.GetPageOffset(), &response.Items)
 		if nil != err {
 			logger.Error.Printf("get role list while fetch role records failed with error:%v", err)
 			handlerErr = microsvc.NewHandlerError(results.DataNotExists, err.Error())
 			break
 		}
 		response.Total = count
+		if nil != response.Items {
+			rmr := builtinmodels.RoleModuleRelation{}
+			module := builtinmodels.Module{}
+			relationRows, err := rdbms.GetInstance().QueryRelationData(rdbms.RelationQuery{
+				Select:              fmt.Sprintf("%s.role_id AS rid, %s.id AS id, %s.name AS name", rmr.TableName(), module.TableName(), module.TableName()),
+				RelationTable:       &rmr,
+				TargetTable:         &module,
+				SelfRelationField:   "role_id",
+				TargetRelationField: "module_id",
+				TargetPrimaryKey:    "id",
+			}, "ID", "Modules", response.Items)
+			if nil != err {
+				logger.Error.Printf("find role ralated modules failed with error:%v", err)
+				break
+			}
+
+			relationNames := map[interface{}][]builtinmodels.NameInfo{}
+			ok := false
+			foundExists := false
+			for _, row := range relationRows {
+				rid := row["rid"]
+				id := row["id"]
+				name := utils.ToString(row["name"])
+				_, ok = relationNames[rid]
+				if ok {
+					foundExists = false
+					for _, o := range relationNames[rid] {
+						if o.ID == id {
+							foundExists = true
+							break
+						}
+					}
+					if false == foundExists {
+						relationNames[rid] = append(relationNames[rid], builtinmodels.NameInfo{ID: id, Name: name})
+					}
+				} else {
+					relationNames[rid] = []builtinmodels.NameInfo{builtinmodels.NameInfo{ID: id, Name: name}}
+				}
+			}
+
+			for _, o := range response.Items {
+				relations, ok := relationNames[o.ID]
+				if ok {
+					o.Modules = relations
+				}
+			}
+		}
 
 		break
 	}
@@ -129,7 +179,7 @@ func (c *roleController) PostEdit(param RoleParam) (*RoleResponse, microsvc.Hand
 }
 
 // PostDelete : delete role
-func (c *roleController) PostDelete(param IDParam) (*RoleResponse, microsvc.HandlerError) {
+func (c *roleController) PostDelete(param parameters.IDParam) (*RoleResponse, microsvc.HandlerError) {
 	var handlerErr microsvc.HandlerError
 	var response *RoleResponse
 	for {

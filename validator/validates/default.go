@@ -10,7 +10,7 @@ import (
 
 // ValidateDefault validator
 func ValidateDefault(v reflect.Value, defaultText string, label string) error {
-	if false == v.IsValid() {
+	if false == v.IsValid() || false == v.CanSet() {
 		return nil
 	}
 	switch v.Type().Kind() {
