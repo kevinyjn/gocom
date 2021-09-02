@@ -25,7 +25,7 @@ func (p *Producer) Send(topic string, value []byte) error {
 		config := k.WriterConfig{
 			Brokers:      p.Brokers,
 			Topic:        topic,
-			Balancer:     &k.LeastBytes{},
+			Balancer:     &k.Hash{},
 			Async:        true,
 			BatchTimeout: 10 * time.Millisecond,
 		}
@@ -45,6 +45,10 @@ func (p *Producer) Send(topic string, value []byte) error {
 
 		}
 		writer = k.NewWriter(config)
+		if p.Config["completion"] != nil {
+			writer.Completion = p.CompletionCallback
+		}
+
 		p.Writer[topic] = writer
 	}
 	err := writer.WriteMessages(context.Background(),
@@ -63,5 +67,6 @@ func NewProducer(hosts string, partition int) *Producer {
 	p.Writer = make(map[string]*k.Writer)
 	p.Brokers = strings.Split(hosts, ",")
 	p.ConfigPartition(partition)
+	p.CompletionCallback = nil
 	return p
 }

@@ -1,9 +1,14 @@
 package kafka
 
+import (
+	k "github.com/segmentio/kafka-go"
+)
+
 // Base .
 type Base struct {
-	Partition int                    // partition 分区
-	Config    map[string]interface{} //kafka 的配置字典
+	Partition          int                                   // partition 分区
+	Config             map[string]interface{}                // kafka 的配置字典
+	CompletionCallback func(messages []k.Message, err error) // 发送状态通知函数
 }
 
 // ConfigServers 配置连接的服务器,如"localhost:9092,localhost:9093".
@@ -65,4 +70,9 @@ func (b *Base) ConfigSessionTimeout(timeout int) {
 // ConfigHeartbeatInterval 配置心跳检测间隔.
 func (b *Base) ConfigHeartbeatInterval(interval int) {
 	b.Config["heartbeat.interval.ms"] = interval
+}
+
+// SetCompletionCallback 消息发送状态通知回调
+func (b *Base) SetCompletionCallback(callback func(messages []k.Message, err error)) {
+	b.CompletionCallback = callback
 }
