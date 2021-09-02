@@ -45,7 +45,7 @@ func (p *Producer) Send(topic string, value []byte) error {
 
 		}
 		writer = k.NewWriter(config)
-		if p.Config["completion"] != nil {
+		if p.CompletionCallback != nil {
 			writer.Completion = p.CompletionCallback
 		}
 
