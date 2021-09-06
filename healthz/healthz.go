@@ -38,11 +38,12 @@ type mqCheckListWrapper struct {
 }
 
 var (
-	livenessTickerCache      = map[string]*mqCheckListWrapper{}
-	mqChecks                 = mqCheckListWrapper{categories: map[string]string{}, m: sync.RWMutex{}}
-	customizedHealthzChecks  []config.HealthzChecks
-	traceLog                 = false
-	livenessTickerCacheMutex = sync.RWMutex{}
+	livenessTickerCache       = map[string]*mqCheckListWrapper{}
+	mqChecks                  = mqCheckListWrapper{categories: map[string]string{}, m: sync.RWMutex{}}
+	customizedHealthzChecks   []config.HealthzChecks
+	traceLog                  = false
+	livenessTickerCacheMutex  = sync.RWMutex{}
+	enablingNetworkingCheckTS = int64(0)
 )
 
 // InitHealthz register iris healthz handler
@@ -54,6 +55,13 @@ func InitHealthz(app *iris.Application) {
 // SetTraceLog boolean
 func SetTraceLog(enable bool) {
 	traceLog = enable
+}
+
+// SetDelayCheckNetworking enables delaying check networking status for kubernetes platform uses istio 1.7 and before
+func SetDelayCheckNetworking(seconds int64) {
+	if seconds > 0 {
+		enablingNetworkingCheckTS = time.Now().Unix() + seconds
+	}
 }
 
 // SetCustomHealthzChecks healthz checks
@@ -162,6 +170,13 @@ func (c *mqCheckListWrapper) SetCategory(category string, value string) {
 }
 
 func handlerHealthz(ctx iris.Context) {
+	if enablingNetworkingCheckTS > 0 {
+		now := time.Now().Unix()
+		if now < enablingNetworkingCheckTS {
+			ctx.WriteString("{\"status\": \"Ok\"}")
+			return
+		}
+	}
 	results := map[string]interface{}{}
 	checkResults := map[string]string{}
 	messages := []string{}
