@@ -72,7 +72,7 @@ type dbSavingSession interface {
 	Insert(beans ...interface{}) (int64, error)
 	InsertOne(bean interface{}) (int64, error)
 	Update(bean interface{}, condiBeans ...interface{}) (int64, error)
-	Delete(bean interface{}) (int64, error)
+	Delete(bean ...interface{}) (int64, error)
 	Close() error
 }
 
