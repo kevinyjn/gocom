@@ -22,6 +22,9 @@ func InitServiceHandler() error {
 		ConsumerTag: mqTopic,
 		AutoAck:     false,
 	}
+	if "" == consumerProxy.Queue {
+		consumerProxy.Queue = mqConfig.Topic
+	}
 	err := mq.ConsumeMQ(mqTopic, &consumerProxy)
 	if nil != err {
 		logger.Error.Printf("Initialize consumer %s failed with error:%v", mqTopic, err)
