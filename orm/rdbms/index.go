@@ -54,6 +54,7 @@ type DataAccessEngine struct {
 	mutexTable                     sync.RWMutex
 	keepaliveTicker                *time.Ticker
 	noAutoTime                     bool // this feature could be removed at xorm@v1.3.0
+	autoSyncTableStructure         bool // flag if enables auto syncronize the table structure with database
 }
 
 var _dpm = &DataAccessEngine{
@@ -66,6 +67,7 @@ var _dpm = &DataAccessEngine{
 	mutexTable:                     sync.RWMutex{},
 	keepaliveTicker:                nil,
 	noAutoTime:                     true,
+	autoSyncTableStructure:         false,
 }
 
 type dbSavingSession interface {
@@ -155,6 +157,12 @@ func (dae *DataAccessEngine) Init(dbDatasourceName string, dbConfig *definations
 // if enabled, the model BeforeInsert and BeforeUpdate event would not be effective for saving to db
 func (dae *DataAccessEngine) EnableAutoTime(enabled bool) {
 	dae.noAutoTime = !enabled
+}
+
+// EnableAutoSyncTableStructure set if enables auto syncronize the table structure with database
+// if enabled, table structure would be auto syncronized to database once first call orm model operation
+func (dae *DataAccessEngine) EnableAutoSyncTableStructure(enabled bool) {
+	dae.autoSyncTableStructure = enabled
 }
 
 // StartKeepAlive keepalive
@@ -603,7 +611,7 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 				}
 			}
 		}
-	} else if reflect.TypeOf(beanOrTableName).Kind() != reflect.String {
+	} else if dae.autoSyncTableStructure && reflect.TypeOf(beanOrTableName).Kind() != reflect.String {
 		err = orm.Sync(beanOrTableName)
 		if nil != err {
 			logger.Error.Printf("Syncronize table '%s' structure with bean:%+v faield with error:%v", getTableName(beanOrTableName), beanOrTableName, err)
