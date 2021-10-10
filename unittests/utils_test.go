@@ -41,11 +41,8 @@ func TestUtilsTimer(t *testing.T) {
 	testingutil.AssertNil(t, err2, "utils.NewTimer")
 	testingutil.AssertNotNil(t, timer2, "timer2")
 	to := time.NewTimer(time.Millisecond * 500)
-	select {
-	case <-to.C:
-		fmt.Println("test timer finished")
-		break
-	}
+	<-to.C
+	fmt.Println("test timer finished")
 }
 
 func TestUtilsURLPathJoin(t *testing.T) {

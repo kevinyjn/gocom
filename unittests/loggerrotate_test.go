@@ -23,10 +23,7 @@ func TestLoggerRotate(t *testing.T) {
 	// to manually test timer, open the bellow flag
 	if false {
 		timer := time.NewTimer(time.Second * 6)
-		select {
-		case <-timer.C:
-			timer.Stop()
-			break
-		}
+		<-timer.C
+		timer.Stop()
 	}
 }

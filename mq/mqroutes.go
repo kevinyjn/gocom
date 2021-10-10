@@ -101,5 +101,5 @@ func InitMQRoutesEnv(configFile string) (*RoutesEnv, error) {
 	if cfgLoaded {
 		return &mqRoutesEnv, nil
 	}
-	return nil, fmt.Errorf("Load mq routes config with config file:%s failed", configFile)
+	return nil, fmt.Errorf("load mq routes config with config file:%s failed", configFile)
 }

@@ -34,11 +34,8 @@ func testGenUUIDInCoroutine() error {
 	}()
 
 	for finishCount < 2 {
-		select {
-		case <-finish:
-			finishCount++
-			break
-		}
+		<-finish
+		finishCount++
 	}
 	return nil
 }

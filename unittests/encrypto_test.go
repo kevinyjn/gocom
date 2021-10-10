@@ -35,7 +35,7 @@ func testDecryptAES(t *testing.T) {
 	var dat map[string]interface{}
 	err = json.Unmarshal(out.Bytes(), &dat)
 	if nil != err {
-		t.Errorf("decode json:%s failed with error:%v", string(out.Bytes()), err)
+		t.Errorf("decode json:%s failed with error:%v", out.String(), err)
 		return
 	}
 	fmt.Printf("decoded buffer:%+v", dat)

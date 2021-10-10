@@ -3,6 +3,7 @@ package mq
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/kevinyjn/gocom/logger"
@@ -43,7 +44,7 @@ func Init(mqConfigFile string, mqDriverConfigs map[string]mqenv.MQConnectorConfi
 		for connName, cfg := range mqDriverConfigs {
 			mqConnConfigsMutex.Lock()
 			_, ok := mqConnConfigs[connName]
-			if false == ok {
+			if !ok {
 				mqConnConfigs[connName] = cfg
 			}
 			mqConnConfigsMutex.Unlock()
@@ -67,21 +68,21 @@ func InitWithMQRoutes(mqRoutesEnv *RoutesEnv, mqDriverConfigs map[string]mqenv.M
 // InitMQTopic initialize sigle mq topic with drivers
 func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[string]mqenv.MQConnectorConfig) error {
 	if nil == topicConfig {
-		return fmt.Errorf("Initialize MQ topic for category:%s while topic config nil", topicCategory)
+		return fmt.Errorf("initialize MQ topic for category:%s while topic config nil", topicCategory)
 	}
 	instCnf, ok := mqDriverConfigs[topicConfig.Instance]
-	if false == ok {
+	if !ok {
 		mqConnConfigsMutex.RLock()
 		instCnf, ok = mqConnConfigs[topicConfig.Instance]
 		mqConnConfigsMutex.RUnlock()
-		if false == ok {
+		if !ok {
 			logger.Error.Printf("Initialize mq:%s with connection instance:%s failed, the instance not configured.", topicCategory, topicConfig.Instance)
-			return fmt.Errorf("Initialize mq:%s with connection instance:%s failed, the instance not configured", topicCategory, topicConfig.Instance)
+			return fmt.Errorf("initialize mq:%s with connection instance:%s failed, the instance not configured", topicCategory, topicConfig.Instance)
 		}
 	} else {
 		mqConnConfigsMutex.Lock()
 		_, ok = mqConnConfigs[topicConfig.Instance]
-		if false == ok {
+		if !ok {
 			mqConnConfigs[topicConfig.Instance] = instCnf
 		}
 		mqConnConfigsMutex.Unlock()
@@ -115,10 +116,20 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			return nil
 		}
 		_, initErr = rabbitmq.InitRabbitMQ(topicCategory, &instCnf, amqpCfg)
-		break
 	case mqenv.DriverTypeKafka:
+		hosts := instCnf.Host
+		if instCnf.Port > 0 {
+			hostParts := strings.Split(hosts, ",")
+			for i, hostPart := range hostParts {
+				hostElems := strings.Split(strings.TrimSpace(hostPart), ":")
+				if len(hostElems) < 2 {
+					hostParts[i] = fmt.Sprintf("%s:%d", strings.TrimSpace(hostElems[0]), instCnf.Port)
+				}
+			}
+			hosts = strings.Join(hostParts, ",")
+		}
 		kafakCfg := kafka.Config{
-			Hosts:              instCnf.Host,
+			Hosts:              hosts,
 			Partition:          topicConfig.Partition,
 			GroupID:            topicConfig.GroupID,
 			MaxPollIntervalMS:  topicConfig.MaxPollIntervalMS,
@@ -128,14 +139,11 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			UseOriginalContent: topicConfig.UseOriginalContent,
 		}
 		_, initErr = kafka.InitKafka(topicCategory, kafakCfg)
-		break
 	case mqenv.DriverTypeMock:
 		mockCfg := mockmq.Config{}
 		_, initErr = mockmq.InitMockMQ(topicCategory, &instCnf, &mockCfg)
-		break
 	default:
-		initErr = fmt.Errorf("Initialize mq:%s with unknown driver:%s", topicCategory, instCnf.Driver)
-		break
+		initErr = fmt.Errorf("initialize mq:%s with unknown driver:%s", topicCategory, instCnf.Driver)
 	}
 
 	if initErr != nil {
@@ -195,11 +203,11 @@ func FindOneCategoryNameByInstance(instanceName string) string {
 // InitMQWithRPC init mq with RPC
 func InitMQWithRPC(topicCategory string, rpcType int, connCfg *mqenv.MQConnectorConfig, mqCfg *Config) error {
 	if mqCfg == nil || connCfg == nil {
-		return fmt.Errorf("Initialize mq rpc with key:%s rpc_type:%d failed, invalid conn_cofig or invalid mq_config", topicCategory, rpcType)
+		return fmt.Errorf("initialize mq rpc with key:%s rpc_type:%d failed, invalid conn_cofig or invalid mq_config", topicCategory, rpcType)
 	}
 	if connCfg.Driver == mqenv.DriverTypeAMQP {
 		mqCategoryDriversMutex.Lock()
-		if "" == mqCategoryDrivers[topicCategory] {
+		if mqCategoryDrivers[topicCategory] == "" {
 			mqCategoryDrivers[topicCategory] = connCfg.Driver
 		}
 		mqCategoryDriversMutex.Unlock()
@@ -222,11 +230,11 @@ func InitMQWithRPC(topicCategory string, rpcType int, connCfg *mqenv.MQConnector
 			QueueAutoDelete: mqCfg.AutoDelete,
 		}
 		if rabbitmq.InitRPCRabbitMQ(topicCategory, rpcType, connCfg, amqpCfg) == nil {
-			return errors.New("Initialize rabbitmq mq rpc failed")
+			return errors.New("initialize rabbitmq mq rpc failed")
 		}
 	} else {
 		logger.Error.Printf("Initialize mq rpc with key:%s rpc_type:%d and driver:%s failed, driver not supported", topicCategory, rpcType, connCfg.Driver)
-		return errors.New("Invalid mq rpc driver")
+		return errors.New("invalid mq rpc driver")
 	}
 	return nil
 }
@@ -246,7 +254,7 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 	var err error
 	mqConfig := GetMQConfig(mqCategory)
 	if nil == mqConfig {
-		return fmt.Errorf("Consume MQ with invalid category:%s", mqCategory)
+		return fmt.Errorf("consume MQ with invalid category:%s", mqCategory)
 	}
 	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
@@ -256,7 +264,7 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 		if mqConfig.RPCEnabled {
 			rpcInst := rabbitmq.GetRPCRabbitMQWithoutConnectedChecking(mqCategory)
 			if nil == rpcInst {
-				return fmt.Errorf("No RPC rabbitmq instance by %s found", mqCategory)
+				return fmt.Errorf("no RPC rabbitmq instance by %s found", mqCategory)
 			}
 			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy, mqConfig.Exchange.Name)
 			rpcInst.Consume <- pxy
@@ -268,25 +276,21 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 			pxy := rabbitmq.GenerateRabbitMQConsumerProxy(consumeProxy, mqConfig.Exchange.Name)
 			inst.Consume <- pxy
 		}
-		break
 	case mqenv.DriverTypeKafka:
 		inst, err := kafka.GetKafka(mqCategory)
 		if nil != err {
 			return err
 		}
 		inst.Subscribe(consumeProxy.Queue, consumeProxy)
-		break
 	case mqenv.DriverTypeMock:
 		inst, err := mockmq.GetMockMQ(mqCategory)
 		if nil != err {
 			return err
 		}
 		inst.Subscribe(consumeProxy.Queue, consumeProxy)
-		break
 	default:
 		logger.Error.Printf("Consume MQ with category:%s failed, unknwon driver:%s", mqCategory, mqDriver)
-		err = fmt.Errorf("Invalid mq %s driver", mqCategory)
-		break
+		err = fmt.Errorf("invalid mq %s driver", mqCategory)
 	}
 	return err
 }
@@ -296,7 +300,7 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 	var err error
 	mqConfig := GetMQConfig(mqCategory)
 	if nil == mqConfig {
-		return fmt.Errorf("Publish MQ with invalid category:%s", mqCategory)
+		return fmt.Errorf("publish MQ with invalid category:%s", mqCategory)
 	}
 	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
@@ -306,7 +310,7 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 		if mqConfig.RPCEnabled {
 			rpcInst := rabbitmq.GetRPCRabbitMQ(mqCategory)
 			if nil == rpcInst {
-				return fmt.Errorf("No RPC rabbitmq instance by %s found", mqCategory)
+				return fmt.Errorf("no RPC rabbitmq instance by %s found", mqCategory)
 			}
 			rpcInst.Publish <- publishMsg
 		} else {
@@ -316,25 +320,21 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 			}
 			inst.Publish <- publishMsg
 		}
-		break
 	case mqenv.DriverTypeKafka:
 		inst, err := kafka.GetKafka(mqCategory)
 		if nil != err {
 			return err
 		}
 		inst.Send(publishMsg.Exchange, publishMsg, false)
-		break
 	case mqenv.DriverTypeMock:
 		inst, err := mockmq.GetMockMQ(mqCategory)
 		if nil != err {
 			return err
 		}
 		inst.Send(mqConfig.Topic, publishMsg, false)
-		break
 	default:
 		logger.Error.Printf("Publish MQ with category:%s failed, unknwon driver:%s", mqCategory, mqDriver)
-		err = fmt.Errorf("Invalid mq %s driver", mqCategory)
-		break
+		err = fmt.Errorf("invalid mq %s driver", mqCategory)
 	}
 	return err
 }
@@ -343,7 +343,7 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 func QueryMQ(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMessage, error) {
 	mqConfig := GetMQConfig(mqCategory)
 	if nil == mqConfig {
-		return nil, fmt.Errorf("Query RPC MQ with invalid category:%s", mqCategory)
+		return nil, fmt.Errorf("query RPC MQ with invalid category:%s", mqCategory)
 	}
 	mqCategoryDriversMutex.RLock()
 	mqDriver := mqCategoryDrivers[mqCategory]
@@ -368,7 +368,7 @@ func QueryMQ(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMe
 		}
 		return inst.Send(mqConfig.Topic, pm, true)
 	default:
-		return nil, fmt.Errorf("Query RPC MQ not supported driver:%s", mqDriver)
+		return nil, fmt.Errorf("query RPC MQ not supported driver:%s", mqDriver)
 	}
 }
 
