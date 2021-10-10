@@ -562,7 +562,7 @@ func (dae *DataAccessEngine) Delete(bean interface{}) (int64, error) {
 // EnsureTableStructures check if the table named in {beanOrTableName} struct exists in database, create it if not exixts.
 func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) error {
 	var ok bool
-	_, datasourceName := dae.getDatasourceName(beanOrTableName, dae.defaultDatasource)
+	structureName, datasourceName := dae.getDatasourceName(beanOrTableName, dae.defaultDatasource)
 	if "" == datasourceName {
 		dae.defaultDatasource = DefaultDatasourceName
 		datasourceName = dae.defaultDatasource
@@ -595,6 +595,8 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 			logger.Warning.Printf("Create table '%s' unique indexes faield with error:%v", getTableName(beanOrTableName), err)
 		}
 
+		_, err = dae.loadStructureTableInfo(orm, structureName, beanOrTableName)
+
 		if false {
 			beanValue := reflect.ValueOf(beanOrTableName)
 			beanType := reflect.TypeOf(beanOrTableName)
@@ -620,6 +622,22 @@ func (dae *DataAccessEngine) EnsureTableStructures(beanOrTableName interface{}) 
 	}
 
 	return nil
+}
+
+func (dae *DataAccessEngine) loadStructureTableInfo(orm *xorm.Engine, structureName string, beanOrTableName interface{}) (*schemas.Table, error) {
+	tbl, err := orm.TableInfo(beanOrTableName)
+	if nil != err {
+		logger.Error.Printf("get table:%s primary keys condition while get table info empty", getTableName(beanOrTableName))
+		return tbl, errors.New("Table info empty")
+	}
+	if nil == tbl {
+		logger.Error.Printf("get table:%s primary keys condition while get table info empty", getTableName(beanOrTableName))
+		return tbl, errors.New("Table info empty")
+	}
+	dae.mutexTable.Lock()
+	dae.structuesByTableBeanName[structureName] = tbl
+	dae.mutexTable.Unlock()
+	return tbl, nil
 }
 
 func getTableName(beanOrTableName interface{}) string {
@@ -769,18 +787,7 @@ func (dae *DataAccessEngine) getPkConditionBean(orm *xorm.Engine, structureName 
 	tbl, ok := dae.structuesByTableBeanName[structureName]
 	dae.mutexTable.RUnlock()
 	if nil == tbl || !ok {
-		tbl, err = orm.TableInfo(bean)
-		if nil != err {
-			logger.Error.Printf("get table:%s primary keys condition while get table info empty", getTableName(bean))
-			return condiBean, errors.New("Table info empty")
-		}
-		if nil == tbl {
-			logger.Error.Printf("get table:%s primary keys condition while get table info empty", getTableName(bean))
-			return condiBean, errors.New("Table info empty")
-		}
-		dae.mutexTable.Lock()
-		dae.structuesByTableBeanName[structureName] = tbl
-		dae.mutexTable.Unlock()
+		tbl, err = dae.loadStructureTableInfo(orm, structureName, bean)
 		pkCols = tbl.PKColumns()
 		getCaches().group(structureName).pkColumns = pkCols
 	} else {

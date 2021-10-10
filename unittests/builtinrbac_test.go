@@ -3,23 +3,15 @@ package unittests
 import (
 	"encoding/base64"
 	"fmt"
-	"os"
 	"testing"
 
-	"github.com/kevinyjn/gocom/definations"
 	"github.com/kevinyjn/gocom/microsvc/acl"
 	"github.com/kevinyjn/gocom/microsvc/builtinmodels"
-	"github.com/kevinyjn/gocom/orm/rdbms"
 	"github.com/kevinyjn/gocom/testingutil"
-	"github.com/kevinyjn/gocom/utils"
-)
-
-const (
-	testingDB = "default"
 )
 
 func TestBuiltinRBAC(t *testing.T) {
-	initTestingDB(t)
+	initRDBMSTestingDB(t)
 	testingutil.AssertNil(t, acl.InitBuiltinRBACModels(), "EnsureTableStructures error")
 	user := builtinmodels.User{}
 	role := builtinmodels.Role{}
@@ -69,20 +61,4 @@ func TestBuiltinRBAC(t *testing.T) {
 	for i, mod := range modules {
 		testingutil.AssertEquals(t, expectedNames[i], mod.Name, fmt.Sprintf("Module[%d].Name", i))
 	}
-}
-
-func initTestingDB(t *testing.T) {
-	dbFile := "./testing.db.test"
-	dbConfig := definations.DBConnectorConfig{
-		Driver:  "sqlite3",
-		Address: "file://" + dbFile,
-		Db:      testingDB,
-	}
-	if utils.IsPathExists(dbFile) {
-		err := os.Remove(dbFile)
-		testingutil.AssertNil(t, err, "Clean RDBMS testing db error")
-	}
-	engine, err := rdbms.GetInstance().Init(testingDB, &dbConfig)
-	testingutil.AssertNil(t, err, "Init RDBMS error")
-	testingutil.AssertNotNil(t, engine, "Init RDBMS engine")
 }
