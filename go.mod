@@ -22,7 +22,7 @@ require (
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/goccy/go-json v0.7.9 // indirect
-	github.com/godror/godror v0.27.1
+	github.com/godror/godror v0.24.6
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
