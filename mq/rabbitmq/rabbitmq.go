@@ -311,21 +311,26 @@ func (r *RabbitMQ) clearNotifyChan() {
 
 func (r *RabbitMQ) close() {
 	r.connecting = false
+	logger.Info.Printf("RabbitMQ connection:%s closing", r.Name)
 	// r.clearNotifyChan()
 	if r.Channel != nil {
+		logger.Info.Printf("RabbitMQ connection:%s closing channel", r.Name)
 		r.Channel.Close()
 		r.Channel = nil
 	}
 	if r.Conn != nil && !r.Conn.IsClosed() {
+		logger.Info.Printf("RabbitMQ connection:%s closing connection", r.Name)
 		r.Conn.Close()
 	}
 	if nil != r.sshTunnel {
+		logger.Info.Printf("RabbitMQ connection:%s closing ssh tunnel", r.Name)
 		r.sshTunnel.Stop()
 		r.sshTunnel = nil
 	}
 	r.Conn = nil
 	r.connClosed = nil
 	r.channelClosed = nil
+	logger.Info.Printf("RabbitMQ connection:%s closing finished", r.Name)
 }
 
 // try to start a new connection, channel and deliveries channel. if failed, try again in 5 sec.
@@ -565,7 +570,7 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 	r.consumers = append(r.consumers, cm)
 
 	deliveries, err := r.Channel.Consume(
-		cm.Queue,       // name
+		r.queueName,    // name
 		cm.ConsumerTag, // consumerTag,
 		false,          // noAck
 		cm.Exclusive,   // exclusive
