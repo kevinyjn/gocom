@@ -25,6 +25,7 @@ type TunnelForwarder struct {
 	Password    string `property:"Password,category:password"`
 	RemoteHost  string `property:"Remote Host"`
 	RemotePort  int    `property:"Remote Port"`
+	PrivateKey  string `property:"Private Key"`
 	localHost   string
 	localPort   int
 	sshConfig   *ssh.ClientConfig
@@ -76,7 +77,13 @@ func (c *TunnelForwarder) ParsePrivateKey(keyPath string) (ssh.Signer, error) {
 
 // InitUserAuth init with user and password
 func (c *TunnelForwarder) InitUserAuth(user, password string) (*ssh.ClientConfig, error) {
-	key, err := c.ParsePrivateKey(c.PrivateKeyPath())
+	var key ssh.Signer
+	var err error
+	if "" == c.PrivateKey {
+		key, err = c.ParsePrivateKey(c.PrivateKeyPath())
+	} else {
+		key, err = ssh.ParsePrivateKey([]byte(c.PrivateKey))
+	}
 	if nil != err {
 		// return nil, err
 		c.sshConfig = &ssh.ClientConfig{
@@ -195,8 +202,22 @@ func (c *TunnelForwarder) ParseFromDSN(DSN string) error {
 	hostSlices := strings.Split(slices[0], ":")
 	c.Host = hostSlices[0]
 	if len(hostSlices) > 1 {
+		if strings.Contains(hostSlices[1], "?") {
+			s2 := strings.Split(hostSlices[1], "?")
+			hostSlices[1] = s2[0]
+			s3 := strings.Split(s2[1], "&")
+			for _, v := range s3 {
+				s4 := strings.Split(v, "=")
+				if len(s4) > 1 {
+					if "privatekey" == strings.ToLower(s4[0]) {
+						c.PrivateKey = utils.URLDecode(s4[1])
+					}
+				}
+			}
+		}
 		port, err := strconv.Atoi(hostSlices[1])
 		if nil != err {
+			c.Port = 22
 			logger.Error.Printf("Parsing SSH Tunnel DSN port part failed with error:%v", err)
 			return fmt.Errorf("Parsing SSH Tunnel DSN port part failed with error:%v", err)
 		}

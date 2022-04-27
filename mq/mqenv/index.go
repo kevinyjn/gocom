@@ -6,9 +6,10 @@ import (
 
 // Constants
 const (
-	DriverTypeAMQP  = "rabbitmq"
-	DriverTypeKafka = "kafka"
-	DriverTypeMock  = "mock"
+	DriverTypeAMQP   = "rabbitmq"
+	DriverTypeKafka  = "kafka"
+	DriverTypePulsar = "pulsar"
+	DriverTypeMock   = "mock"
 
 	MQTypeConsumer  = 1
 	MQTypePublisher = 2
@@ -16,6 +17,9 @@ const (
 	MQEventCodeOk     = 0
 	MQEventCodeFailed = -1
 	MQEventCodeClosed = -9
+
+	MQReconnectSeconds        = 1
+	MQQueueStatusFreshSeconds = 30
 )
 
 // MQEvent event
@@ -89,6 +93,7 @@ type MQConsumerProxy struct {
 	Exclusive   bool
 	NoLocal     bool
 	NoWait      bool
+	Ready       chan bool // notifies if consumer subscribes ready
 }
 
 // GetHeader by key

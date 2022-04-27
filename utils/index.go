@@ -386,8 +386,14 @@ func URLDecode(val string) string {
 // URLPathJoin slices
 func URLPathJoin(path string, paths ...string) string {
 	path = strings.Trim(path, " ")
-	results := []string{path}
-	endsWithSep := len(path) > 0 && '/' == path[len(path)-1]
+	results := []string{}
+	endsWithSep := false
+	if len(path) > 0 {
+		results = append(results, path)
+		if '/' == path[len(path)-1] {
+			endsWithSep = true
+		}
+	}
 	if len(paths) > 0 {
 		for _, p := range paths {
 			p = strings.Trim(p, " ")
@@ -404,7 +410,11 @@ func URLPathJoin(path string, paths ...string) string {
 				if endsWithSep {
 					results = append(results, p)
 				} else {
-					results = append(results, "/"+p)
+					if len(results) > 0 {
+						results = append(results, "/"+p)
+					} else {
+						results = append(results, p)
+					}
 				}
 			}
 			endsWithSep = '/' == p[len(p)-1]

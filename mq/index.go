@@ -10,6 +10,7 @@ import (
 	"github.com/kevinyjn/gocom/mq/kafka"
 	"github.com/kevinyjn/gocom/mq/mockmq"
 	"github.com/kevinyjn/gocom/mq/mqenv"
+	"github.com/kevinyjn/gocom/mq/pulsar"
 	"github.com/kevinyjn/gocom/mq/rabbitmq"
 )
 
@@ -139,6 +140,16 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			UseOriginalContent: topicConfig.UseOriginalContent,
 		}
 		_, initErr = kafka.InitKafka(topicCategory, kafakCfg)
+	case mqenv.DriverTypePulsar:
+		pulsarCfg := &pulsar.Config{
+			ConnConfigName: topicConfig.Instance,
+			Topic:          topicConfig.Topic,
+			MessageType:    topicConfig.MessageType,
+		}
+		if "" == pulsarCfg.Topic && "" != topicConfig.Queue {
+			pulsarCfg.Topic = topicConfig.Queue
+		}
+		_, initErr = pulsar.InitPulsarMQ(topicCategory, &instCnf, pulsarCfg)
 	case mqenv.DriverTypeMock:
 		mockCfg := mockmq.Config{}
 		_, initErr = mockmq.InitMockMQ(topicCategory, &instCnf, &mockCfg)
@@ -239,14 +250,19 @@ func InitMQWithRPC(topicCategory string, rpcType int, connCfg *mqenv.MQConnector
 	return nil
 }
 
-// GetRabbitMQ get rabbitmq
+// GetRabbitMQ get rabbitmq instance
 func GetRabbitMQ(name string) (*rabbitmq.RabbitMQ, error) {
 	return rabbitmq.GetRabbitMQ(name)
 }
 
-// GetKafka get kafka.
+// GetKafka get kafka instance
 func GetKafka(name string) (*kafka.KafkaWorker, error) {
 	return kafka.GetKafka(name)
+}
+
+// GetPulsar get pulsar instance
+func GetPulsar(name string) (*pulsar.PulsarMQ, error) {
+	return pulsar.GetPulsarMQ(name)
 }
 
 // ConsumeMQ consume
@@ -282,6 +298,12 @@ func ConsumeMQ(mqCategory string, consumeProxy *mqenv.MQConsumerProxy) error {
 			return err
 		}
 		inst.Subscribe(consumeProxy.Queue, consumeProxy)
+	case mqenv.DriverTypePulsar:
+		inst, err := pulsar.GetPulsarMQ(mqCategory)
+		if nil != err {
+			return err
+		}
+		inst.Consume <- consumeProxy
 	case mqenv.DriverTypeMock:
 		inst, err := mockmq.GetMockMQ(mqCategory)
 		if nil != err {
@@ -326,6 +348,12 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 			return err
 		}
 		inst.Send(publishMsg.Exchange, publishMsg, false)
+	case mqenv.DriverTypePulsar:
+		inst, err := pulsar.GetPulsarMQ(mqCategory)
+		if nil != err {
+			return err
+		}
+		inst.Publish <- publishMsg
 	case mqenv.DriverTypeMock:
 		inst, err := mockmq.GetMockMQ(mqCategory)
 		if nil != err {
@@ -361,6 +389,12 @@ func QueryMQ(mqCategory string, pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMe
 			return nil, err
 		}
 		return inst.Send(pm.Exchange, pm, true)
+	case mqenv.DriverTypePulsar:
+		inst, err := pulsar.GetPulsarMQ(mqCategory)
+		if nil != err {
+			return nil, err
+		}
+		return inst.QueryRPC(pm)
 	case mqenv.DriverTypeMock:
 		inst, err := mockmq.GetMockMQ(mqCategory)
 		if nil != err {
@@ -382,6 +416,8 @@ func SetupTrackerQueue(queueName string) {
 	// rabbitmq
 	rabbitmq.SetupTrackerQueue(queueName)
 	// kafka ...
+	// pulsar
+	pulsar.SetupTrackerQueue(queueName)
 }
 
 // NewMQResponseMessage new mq response publish messge depends on mq consumer message

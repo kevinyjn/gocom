@@ -2,11 +2,11 @@ package rabbitmq
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/kevinyjn/gocom/logger"
 	"github.com/kevinyjn/gocom/mq/mqenv"
+	"github.com/kevinyjn/gocom/utils"
 
 	"github.com/streadway/amqp"
 )
@@ -107,19 +107,9 @@ func (r *RabbitRPC) ensureRPCConsumer() {
 	}
 }
 
-func genCorrelationID() string {
-	unix32bits := uint32(time.Now().UTC().Unix())
-	buff := make([]byte, 12)
-	numRead, err := rand.Read(buff)
-	if numRead != len(buff) || err != nil {
-		return ""
-	}
-	return fmt.Sprintf("%x-%x-%x-%x-%x-%x", unix32bits, buff[0:2], buff[2:4], buff[4:6], buff[6:8], buff[8:])
-}
-
 func (r *RabbitRPC) ensureRPCCorrelationID(pm *mqenv.MQPublishMessage) (string, string) {
 	if "" == pm.CorrelationID {
-		pm.CorrelationID = genCorrelationID()
+		pm.CorrelationID = utils.GenLoweruuid()
 	}
 	originPm, _ := _cbs[pm.CorrelationID]
 	if nil == originPm || originPm.Response == nil {

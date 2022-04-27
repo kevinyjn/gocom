@@ -94,7 +94,7 @@ func handleMQServiceMessage(cm mqenv.MQConsumerMessage) *mqenv.MQPublishMessage 
 	pm := &mqenv.MQPublishMessage{
 		Body: []byte("2. " + body),
 	}
-	resp, err := mq.QueryMQRPC("stage2", pm)
+	resp, err := mq.QueryMQ("stage2", pm)
 	if nil != err {
 		fmt.Printf("WARNING: query biz producer failed with error:%v\n", err)
 		return mq.NewMQResponseMessage([]byte(err.Error()), &cm)
@@ -114,7 +114,7 @@ func testPublishRPCMessage() {
 	pm := &mqenv.MQPublishMessage{
 		Body: []byte("1. Testing data"),
 	}
-	resp, err := mq.QueryMQRPC("biz-consumer", pm)
+	resp, err := mq.QueryMQ("biz-consumer", pm)
 	if nil != err {
 		fmt.Printf("WARNING: query biz consumer rpc failed with error:%v\n", err)
 	} else {
@@ -126,7 +126,7 @@ func testPublishWebMessage(ctx iris.Context) {
 	pm := &mqenv.MQPublishMessage{
 		Body: []byte("1. Testing data"),
 	}
-	resp, err := mq.QueryMQRPC("biz-consumer", pm)
+	resp, err := mq.QueryMQ("biz-consumer", pm)
 	if nil != err {
 		ctx.WriteString(fmt.Sprintf("query failed with error:%v", err))
 	} else {

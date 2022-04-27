@@ -666,7 +666,7 @@ func (r *RabbitMQ) getRPCInstance() (*RabbitMQ, error) {
 
 func (r *RabbitMQ) ensureRPCMessage(pm *mqenv.MQPublishMessage) {
 	if "" == pm.CorrelationID {
-		pm.CorrelationID = genCorrelationID()
+		pm.CorrelationID = utils.GenLoweruuid()
 	}
 	pm.ReplyTo = r.queueName
 	r.rpcCallbacksMutex.Lock()

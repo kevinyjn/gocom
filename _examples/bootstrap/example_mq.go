@@ -30,7 +30,7 @@ func InitServiceHandler() error {
 		logger.Error.Printf("Initialize consumer %s failed with error:%v", mqTopic, err)
 		return err
 	}
-	testEnsureKafkaProducer()
+	// testEnsureKafkaProducer()
 
 	go func() {
 		tiker := time.NewTicker(time.Second * 5)
