@@ -119,7 +119,7 @@ func (r *RabbitRPC) ensureRPCCorrelationID(pm *mqenv.MQPublishMessage) (string, 
 	// if "" != routingKey {
 	// 	return exchangeName, routingKey
 	// }
-	return "", r.queueName
+	return "", r.queueInfo.name
 }
 
 func handleRPCConsume(deliveries <-chan amqp.Delivery, done chan error) {

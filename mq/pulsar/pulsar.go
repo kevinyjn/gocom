@@ -82,7 +82,7 @@ func (r *PulsarMQ) initWithParameters(mqConnName string, connCfg *mqenv.MQConnec
 	r.Consume = make(chan *mqenv.MQConsumerProxy)
 	r.namespace = connCfg.Path
 	r.topicName = utils.URLPathJoin(r.namespace, pulsarCfg.Topic)
-	r.healthzTopicPrefix = utils.URLPathJoin(r.namespace, "healthz")
+	r.healthzTopicPrefix = "non-persistent://" + utils.URLPathJoin(r.namespace, "healthz")
 	r.Done = make(chan error)
 	r.Close = make(chan interface{})
 	r.consumers = map[string]consumerWrapper{}
@@ -311,7 +311,7 @@ func (r *PulsarMQ) prepareTopicName(topicName string) string {
 	if "" == topicName {
 		return r.topicName
 	}
-	if strings.HasPrefix(topicName, r.namespace) {
+	if strings.HasPrefix(topicName, r.namespace) || strings.HasPrefix(topicName, "non-persistent://") || strings.HasPrefix(topicName, "persistent://") {
 		return topicName
 	}
 	return utils.URLPathJoin(r.namespace, topicName)
@@ -582,8 +582,9 @@ func (r *PulsarMQ) getRPCInstance() (*PulsarMQ, error) {
 		MessageType:    "topic",
 	}
 	rpcInst = NewPulsarMQ(r.rpcInstanceName, r.connConfig, config)
-	err := rpcInst.init()
+	rpcInst.topicName = "non-persistent://" + rpcInst.topicName
 	rpcInst.isInstanceRPC = true
+	err := rpcInst.init()
 	if err == nil {
 		go rpcInst.Run()
 	} else {

@@ -64,14 +64,16 @@ type RabbitMQ struct {
 	Close       chan interface{}
 	QueueStatus *RabbitQueueStatus
 
-	connClosed          chan *amqp.Error
-	channelClosed       chan *amqp.Error
+	eventConnClosed     chan *amqp.Error
+	eventChannelClosed  chan *amqp.Error
+	eventConnBlocked    chan amqp.Blocking
+	eventChannelReturn  chan amqp.Return
+	eventChannelCancel  chan string
 	consumers           []*RabbitConsumerProxy
 	pendingConsumers    []*RabbitConsumerProxy
 	pendingPublishes    []*mqenv.MQPublishMessage
 	connecting          bool
-	queueName           string
-	queue               *amqp.Queue
+	queueInfo           queueDescribes
 	sshTunnel           *sshtunnel.TunnelForwarder
 	afterEnsureQueue    func()
 	beforePublish       func(*mqenv.MQPublishMessage) (string, string)
@@ -103,4 +105,61 @@ func (me *AMQPConfig) Equals(to *AMQPConfig) bool {
 // IsBroadcastExange check if the configure is fanout
 func (me *AMQPConfig) IsBroadcastExange() bool {
 	return "fanout" == me.ExchangeType
+}
+
+// Clone a AMQPConfig object
+func (me *AMQPConfig) Clone() AMQPConfig {
+	return AMQPConfig{
+		ConnConfigName:  me.ConnConfigName,
+		Queue:           me.Queue,
+		QueueDurable:    me.QueueDurable,
+		BindingExchange: me.BindingExchange,
+		ExchangeName:    me.ExchangeName,
+		ExchangeType:    me.ExchangeType,
+		BindingKey:      me.BindingKey,
+		QueueAutoDelete: me.QueueAutoDelete,
+	}
+}
+
+// queueDescribes queue that declared
+type queueDescribes struct {
+	name        string
+	messages    int
+	consumers   int
+	durable     bool
+	autoDelete  bool
+	exclusive   bool
+	noWait      bool
+	isBroadcast bool
+	lastName    string
+	initialName string
+}
+
+func (d *queueDescribes) clear() {
+	d.lastName = d.name
+	d.name = ""
+	d.messages = 0
+	d.consumers = 0
+	d.durable = false
+	d.autoDelete = false
+	d.exclusive = false
+	d.noWait = false
+	d.isBroadcast = false
+}
+
+func (d *queueDescribes) copy(s queueDescribes) {
+	d.lastName = ""
+	d.name = s.name
+	d.messages = s.messages
+	d.consumers = s.consumers
+	d.durable = s.durable
+	d.autoDelete = s.autoDelete
+	d.exclusive = s.exclusive
+	d.noWait = s.noWait
+	d.isBroadcast = s.isBroadcast
+}
+
+// NotInitialized if the queue describes information were not initialized
+func (d *queueDescribes) NotInitialized() bool {
+	return d.name == ""
 }
