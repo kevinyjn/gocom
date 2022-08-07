@@ -18,6 +18,11 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// Constants
+const (
+	ChannelConsumerDeliveryCheckIntervalSeconds = int64(9)
+)
+
 // Variables
 var (
 	amqpInsts            = map[string]*RabbitMQ{}
@@ -180,7 +185,8 @@ func (r *RabbitMQ) initWithParameters(mqConnName string, connCfg *mqenv.MQConnec
 	r.Name = mqConnName
 	r.Config = amqpCfg
 	r.ConnConfig = connCfg
-	r.Publish = make(chan *mqenv.MQPublishMessage)
+	r.Publish = make(chan *mqenv.MQPublishMessage, mqenv.GetPublishMessageChannelSize())
+	// r.Publish = make(chan *mqenv.MQPublishMessage)
 	r.Consume = make(chan *RabbitConsumerProxy)
 	r.Done = make(chan error)
 	r.Close = make(chan interface{})
@@ -188,9 +194,10 @@ func (r *RabbitMQ) initWithParameters(mqConnName string, connCfg *mqenv.MQConnec
 		QueueName:      amqpCfg.Queue,
 		RefreshingTime: 0,
 	}
-	r.consumers = make([]*RabbitConsumerProxy, 0)
+	r.consumers = map[string]*RabbitConsumerProxy{}
 	r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
 	r.pendingPublishes = make([]*mqenv.MQPublishMessage, 0)
+	r.rpcResponseChannel = make(chan mqenv.MQConsumerMessage)
 	r.connecting = false
 	r.afterEnsureQueue = r.ensurePendings
 	r.rpcInstanceName = fmt.Sprintf("@rpc-%s", r.Config.ConnConfigName)
@@ -198,6 +205,7 @@ func (r *RabbitMQ) initWithParameters(mqConnName string, connCfg *mqenv.MQConnec
 	r.pendingReplies = make(map[string]amqp.Delivery)
 	r.rpcCallbacksMutex = sync.RWMutex{}
 	r.pendingRepliesMutex = sync.RWMutex{}
+	r.consumersMutex = sync.RWMutex{}
 	hostName, err := os.Hostname()
 	if nil != err {
 		logger.Error.Printf("RabbitMQ %s initialize while get hostname failed with error:%v", r.Name, err)
@@ -219,14 +227,20 @@ func (r *RabbitMQ) Run() {
 	tick := time.NewTicker(time.Second * 2)
 	for {
 		if r.connecting == false && r.Conn == nil {
+			r.consumersMutex.RLock()
 			if len(r.consumers) > 0 {
+				r.consumersMutex.RUnlock()
+				r.consumersMutex.Lock()
 				if nil == r.pendingConsumers {
 					r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
 				}
 				for _, cm := range r.consumers {
 					r.pendingConsumers = append(r.pendingConsumers, cm)
 				}
-				r.consumers = make([]*RabbitConsumerProxy, 0)
+				r.consumers = map[string]*RabbitConsumerProxy{}
+				r.consumersMutex.Unlock()
+			} else {
+				r.consumersMutex.RUnlock()
 			}
 			logger.Trace.Printf("rabbitmq %s pre running...", r.Name)
 			r.initConn()
@@ -309,7 +323,43 @@ func (r *RabbitMQ) Run() {
 			} else if nil == r.Channel {
 				logger.Warning.Printf("RabbitMQ channel:%s were nil", r.Name)
 			} else {
-				//
+				// check consumer were abnormal consuming message
+				shouldReconnect := false
+				r.consumersMutex.RLock()
+				if nil != r.consumers {
+					for qname, cm := range r.consumers {
+						q, err := r.Channel.QueueInspect(qname)
+						now := time.Now().Unix()
+						interval := now - cm._lastTimer
+						if nil == err {
+							// logger.Debug.Printf("RabbitMQ connection:%s queue:%s consumers:%d and queued messages:%d", r.Name, qname, q.Consumers, q.Messages)
+							if 0 >= q.Consumers || (0 < q.Messages && 0 == cm._consumed) {
+								if ChannelConsumerDeliveryCheckIntervalSeconds < interval {
+									logger.Warning.Printf("RabbitMQ connection:%s with queue:%s detected that has %d consumers and queued messages:%d without delivering consuming messages in %d seconds, would trying close connection and reconnect.", r.Name, qname, q.Consumers, q.Messages, interval)
+									shouldReconnect = true
+								}
+							}
+						} else {
+							logger.Error.Printf("RabbitMQ connection:%s inspect queue:%s info failed with error:%v, would closing the connection and reconnect", r.Name, qname, err)
+							shouldReconnect = true
+						}
+						if ChannelConsumerDeliveryCheckIntervalSeconds < interval {
+							cm._consumed = 0
+							cm._lastTimer = now
+						}
+					}
+				}
+				if shouldReconnect {
+					for _, cm := range r.consumers {
+						logger.Warning.Printf("RabbitMQ connection:%s detected that should reconnect, now cancel consumer:%s", r.Name, cm.ConsumerTag)
+						r.Channel.Cancel(cm.ConsumerTag, true)
+					}
+				}
+				r.consumersMutex.RUnlock()
+				if shouldReconnect {
+					logger.Warning.Printf("RabbitMQ connection:%s detected that should reconnect the connection", r.Name)
+					r.close()
+				}
 			}
 			break
 		}
@@ -318,21 +368,26 @@ func (r *RabbitMQ) Run() {
 
 func (r *RabbitMQ) clearNotifyChan() {
 	if r.eventChannelClosed != nil {
-		for err := range r.eventChannelClosed {
-			logger.Warning.Printf("Clearing channel closed event:%v", err)
-		}
+		logger.Info.Printf("Clearing RabbitMQ:%s channel closed event", r.Name)
+		// for err := range r.eventChannelClosed {
+		// 	logger.Warning.Printf("Clearing RabbitMQ:%s channel closed event:%v", r.Name, err)
+		// }
+		// close(r.eventChannelClosed)
 		r.eventChannelClosed = nil
 	}
 	if r.eventConnClosed != nil {
-		for err := range r.eventConnClosed {
-			logger.Warning.Printf("Clearing connection closed event:%v", err)
-		}
+		logger.Info.Printf("Clearing RabbitMQ:%s connection closed event", r.Name)
+		// for err := range r.eventConnClosed {
+		// 	logger.Warning.Printf("Clearing RabbitMQ:%s connection closed event:%v", r.Name, err)
+		// }
+		// close(r.eventConnClosed)
 		r.eventConnClosed = nil
 	}
 	if r.eventConnBlocked != nil {
 		// for _ := range r.eventConnBlocked {
 		// 	//
 		// }
+		// close(r.eventConnBlocked)
 		r.eventConnBlocked = nil
 	}
 	r.eventChannelReturn = nil
@@ -351,7 +406,10 @@ func (r *RabbitMQ) close() {
 	}
 	if r.Conn != nil && !r.Conn.IsClosed() {
 		logger.Info.Printf("RabbitMQ connection:%s closing connection", r.Name)
-		r.Conn.Close()
+		err := r.Conn.Close()
+		if nil != err {
+			logger.Warning.Printf("RabbitMQ connection:%s closing connection got error:%v", r.Name, err)
+		}
 		logger.Info.Printf("RabbitMQ connection:%s closing connection done", r.Name)
 	}
 	if nil != r.sshTunnel {
@@ -412,6 +470,7 @@ func (r *RabbitMQ) initConn() error {
 						logger.Fatal.Printf("RabbitMQ %s create channel failed with error:%v", r.Name, err)
 						return
 					}
+					// r.Channel.Qos(128, 2048000, false)
 					r.eventChannelClosed = make(chan *amqp.Error)
 					r.Channel.NotifyClose(r.eventChannelClosed)
 					r.eventChannelReturn = make(chan amqp.Return)
@@ -419,8 +478,12 @@ func (r *RabbitMQ) initConn() error {
 					r.eventChannelCancel = make(chan string)
 					r.Channel.NotifyCancel(r.eventChannelCancel)
 
+					r.consumersMutex.RLock()
 					if r.Config.IsBroadcastExange() && len(r.consumers) <= 0 && len(r.pendingConsumers) <= 0 {
+						r.consumersMutex.RUnlock()
 						break
+					} else {
+						r.consumersMutex.RUnlock()
 					}
 					err = r.ensureQueue()
 					if nil != err {
@@ -612,6 +675,10 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 }
 
 func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
+	if nil == r.deliveryQueue {
+		r.deliveryQueue = make(chan deliveryData)
+		go r.processConsumerDeliveries()
+	}
 	if r.Channel == nil {
 		logger.Warning.Printf("Consuming queue:%s failed while the channel not ready, pending.", cm.Queue)
 		r.pendingConsumers = append(r.pendingConsumers, cm)
@@ -639,10 +706,14 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 		queueName = queueInfo.name
 	}
 
+	r.consumersMutex.Lock()
 	if nil == r.consumers {
-		r.consumers = make([]*RabbitConsumerProxy, 0)
+		r.consumers = map[string]*RabbitConsumerProxy{}
 	}
-	r.consumers = append(r.consumers, cm)
+	cm._consumed = 0
+	cm._lastTimer = time.Now().Unix()
+	r.consumers[queueName] = cm
+	r.consumersMutex.Unlock()
 
 	deliveries, err := r.Channel.Consume(
 		queueName,      // name
@@ -658,29 +729,45 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 		return err
 	}
 	logger.Info.Printf("Now consuming mq(%s) queue:%s and tag:%s with declared queue:%s ...", r.Name, cm.Queue, cm.ConsumerTag, queueName)
-	go r.handleConsumes(cm.Callback, cm.AutoAck, deliveries)
+	go r.handleConsumes(cm.Callback, cm.AutoAck, deliveries, cm)
 	return nil
 }
 
-func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliveries <-chan amqp.Delivery) {
+func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliveries <-chan amqp.Delivery, cm *RabbitConsumerProxy) {
 	for d := range deliveries {
 		if logger.IsDebugEnabled() {
 			// skip the healthz checking log
 			if false == strings.HasPrefix(d.RoutingKey, "healthz") {
-				logger.Trace.Printf(
-					"got %dB delivery: [%v] from rk:%s(%s) %s",
-					len(d.Body),
-					d.DeliveryTag,
-					d.RoutingKey,
-					d.Exchange,
-					d.Body,
-				)
+				msgLen := len(d.Body)
+				if 4096 > msgLen {
+					logger.Trace.Printf("got %dB delivery: [%v] from rk:%s(%s) %s",
+						msgLen, d.DeliveryTag, d.RoutingKey, d.Exchange, d.Body)
+				} else {
+					logger.Trace.Printf("got large message %dB delivery: [%v] from rk:%s(%s)",
+						msgLen, d.DeliveryTag, d.RoutingKey, d.Exchange)
+				}
 			}
 		}
 		// fmt.Println("---- got delivery message d:", d)
-		go r.handleConsumeCallback(d, cb, autoAck)
+		dd := deliveryData{delivery: d, callback: cb, autoAck: autoAck}
+		if nil == r.deliveryQueue {
+			r.deliveryQueue = make(chan deliveryData)
+			go r.processConsumerDeliveries()
+		}
+		r.deliveryQueue <- dd
+		// go r.handleConsumeCallback(d, cb, autoAck)
+		if nil != cm {
+			cm._consumed++
+		}
 	}
 	r.Done <- fmt.Errorf("error: deliveries channel closed")
+}
+
+func (r *RabbitMQ) processConsumerDeliveries() {
+	for dd := range r.deliveryQueue {
+		r.handleConsumeCallback(dd.delivery, dd.callback, dd.autoAck)
+	}
+	r.deliveryQueue = nil
 }
 
 func (r *RabbitMQ) getRPCInstance() (*RabbitMQ, error) {
@@ -782,7 +869,8 @@ func (r *RabbitMQ) handleConsumeCallback(d amqp.Delivery, cb AMQPConsumerCallbac
 
 // QueryRPC publishes a message and waiting the response
 func (r *RabbitMQ) QueryRPC(pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMessage, error) {
-	pm.Response = make(chan mqenv.MQConsumerMessage)
+	// pm.Response = make(chan mqenv.MQConsumerMessage)
+	pm.Response = r.rpcResponseChannel
 	r.Publish <- pm
 
 	var timer *time.Timer

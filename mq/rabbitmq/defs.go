@@ -38,6 +38,8 @@ type RabbitConsumerProxy struct {
 	NoLocal     bool
 	NoWait      bool
 	Arguments   amqp.Table
+	_consumed   int
+	_lastTimer  int64
 }
 
 // RabbitQueueStatus queue status
@@ -69,9 +71,11 @@ type RabbitMQ struct {
 	eventConnBlocked    chan amqp.Blocking
 	eventChannelReturn  chan amqp.Return
 	eventChannelCancel  chan string
-	consumers           []*RabbitConsumerProxy
+	consumers           map[string]*RabbitConsumerProxy
 	pendingConsumers    []*RabbitConsumerProxy
 	pendingPublishes    []*mqenv.MQPublishMessage
+	deliveryQueue       chan deliveryData
+	rpcResponseChannel  chan mqenv.MQConsumerMessage
 	connecting          bool
 	queueInfo           queueDescribes
 	sshTunnel           *sshtunnel.TunnelForwarder
@@ -83,6 +87,7 @@ type RabbitMQ struct {
 	pendingReplies      map[string]amqp.Delivery
 	rpcCallbacksMutex   sync.RWMutex
 	pendingRepliesMutex sync.RWMutex
+	consumersMutex      sync.RWMutex
 }
 
 // RabbitRPC rpc instance
@@ -162,4 +167,10 @@ func (d *queueDescribes) copy(s queueDescribes) {
 // NotInitialized if the queue describes information were not initialized
 func (d *queueDescribes) NotInitialized() bool {
 	return d.name == ""
+}
+
+type deliveryData struct {
+	delivery amqp.Delivery
+	callback AMQPConsumerCallback
+	autoAck  bool
 }
