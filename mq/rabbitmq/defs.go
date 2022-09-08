@@ -55,16 +55,15 @@ type AMQPConsumerCallback func(amqp.Delivery) *mqenv.MQPublishMessage
 
 // RabbitMQ instance
 type RabbitMQ struct {
-	Name        string
-	Publish     chan *mqenv.MQPublishMessage
-	Consume     chan *RabbitConsumerProxy
-	Done        chan error
-	Channel     *amqp.Channel
-	Conn        *amqp.Connection
-	Config      *AMQPConfig
-	ConnConfig  *mqenv.MQConnectorConfig
-	Close       chan interface{}
-	QueueStatus *RabbitQueueStatus
+	Name       string
+	Publish    chan *mqenv.MQPublishMessage
+	Consume    chan *RabbitConsumerProxy
+	Done       chan error
+	Channel    *amqp.Channel
+	Conn       *amqp.Connection
+	Config     *AMQPConfig
+	ConnConfig *mqenv.MQConnectorConfig
+	Close      chan interface{}
 
 	eventConnClosed     chan *amqp.Error
 	eventChannelClosed  chan *amqp.Error
@@ -85,9 +84,11 @@ type RabbitMQ struct {
 	rpcInstanceName     string
 	rpcCallbacks        map[string]*mqenv.MQPublishMessage
 	pendingReplies      map[string]amqp.Delivery
+	queuesStatus        map[string]*RabbitQueueStatus
 	rpcCallbacksMutex   sync.RWMutex
 	pendingRepliesMutex sync.RWMutex
 	consumersMutex      sync.RWMutex
+	queuesStatusMutex   sync.RWMutex
 }
 
 // RabbitRPC rpc instance

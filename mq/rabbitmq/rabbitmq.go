@@ -115,6 +115,7 @@ func inspectQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (queueDescribes, e
 		exclusive:   false,
 		noWait:      false,
 		isBroadcast: false,
+		initialName: amqpCfg.Queue,
 	}
 	if amqpCfg.IsBroadcastExange() {
 		queueInfo.autoDelete = true
@@ -190,9 +191,11 @@ func (r *RabbitMQ) initWithParameters(mqConnName string, connCfg *mqenv.MQConnec
 	r.Consume = make(chan *RabbitConsumerProxy)
 	r.Done = make(chan error)
 	r.Close = make(chan interface{})
-	r.QueueStatus = &RabbitQueueStatus{
-		QueueName:      amqpCfg.Queue,
-		RefreshingTime: 0,
+	r.queuesStatus = map[string]*RabbitQueueStatus{
+		amqpCfg.Queue: &RabbitQueueStatus{
+			QueueName:      amqpCfg.Queue,
+			RefreshingTime: 0,
+		},
 	}
 	r.consumers = map[string]*RabbitConsumerProxy{}
 	r.pendingConsumers = make([]*RabbitConsumerProxy, 0)
@@ -344,6 +347,9 @@ func (r *RabbitMQ) Run() {
 							shouldReconnect = true
 						}
 						if ChannelConsumerDeliveryCheckIntervalSeconds < interval {
+							if 30 < cm._consumed {
+								logger.Info.Printf("RabbitMQ connection:%s queue:%s consumed %d messages in past %d seconds", r.Name, qname, cm._consumed, interval)
+							}
 							cm._consumed = 0
 							cm._lastTimer = now
 						}
@@ -542,10 +548,22 @@ func (r *RabbitMQ) ensureQueue() error {
 		logger.Fatal.Printf("RabbitMQ %s create queue:%s failed with error:%v", r.Name, r.Config.Queue, err)
 		return err
 	}
-	r.QueueStatus.QueueName = queueInfo.name
-	r.QueueStatus.Consumers = queueInfo.consumers
-	r.QueueStatus.Messages = queueInfo.messages
-	r.QueueStatus.RefreshingTime = time.Now().Unix()
+	if "" != queueInfo.initialName {
+		r.queuesStatusMutex.Lock()
+		queueStatus, ok := r.queuesStatus[queueInfo.initialName]
+		if false == ok || nil == queueStatus {
+			queueStatus = &RabbitQueueStatus{
+				QueueName:      queueInfo.name,
+				RefreshingTime: 0,
+			}
+			r.queuesStatus[queueInfo.initialName] = queueStatus
+		}
+		r.queuesStatusMutex.Unlock()
+		queueStatus.QueueName = queueInfo.name
+		queueStatus.Consumers = queueInfo.consumers
+		queueStatus.Messages = queueInfo.messages
+		queueStatus.RefreshingTime = time.Now().Unix()
+	}
 	r.queueInfo.initialName = r.Config.Queue
 	r.queueInfo.copy(queueInfo)
 	if nil != r.afterEnsureQueue {
@@ -676,8 +694,7 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 
 func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 	if nil == r.deliveryQueue {
-		r.deliveryQueue = make(chan deliveryData)
-		go r.processConsumerDeliveries()
+		r.ensureDeliveryQueue()
 	}
 	if r.Channel == nil {
 		logger.Warning.Printf("Consuming queue:%s failed while the channel not ready, pending.", cm.Queue)
@@ -718,7 +735,7 @@ func (r *RabbitMQ) consume(cm *RabbitConsumerProxy) error {
 	deliveries, err := r.Channel.Consume(
 		queueName,      // name
 		cm.ConsumerTag, // consumerTag,
-		false,          // noAck
+		false,          // autoAck
 		cm.Exclusive,   // exclusive
 		cm.NoLocal,     // noLocal
 		cm.NoWait,      // noWait
@@ -751,8 +768,7 @@ func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliver
 		// fmt.Println("---- got delivery message d:", d)
 		dd := deliveryData{delivery: d, callback: cb, autoAck: autoAck}
 		if nil == r.deliveryQueue {
-			r.deliveryQueue = make(chan deliveryData)
-			go r.processConsumerDeliveries()
+			r.ensureDeliveryQueue()
 		}
 		r.deliveryQueue <- dd
 		// go r.handleConsumeCallback(d, cb, autoAck)
@@ -840,6 +856,13 @@ func (r *RabbitMQ) ensureRPCMessage(pm *mqenv.MQPublishMessage) {
 		r.rpcCallbacks[pm.CorrelationID] = pm
 	}
 	r.rpcCallbacksMutex.Unlock()
+}
+
+func (r *RabbitMQ) ensureDeliveryQueue() {
+	if nil == r.deliveryQueue {
+		r.deliveryQueue = make(chan deliveryData, 1024)
+		go r.processConsumerDeliveries()
+	}
 }
 
 func (r *RabbitMQ) handleConsumeCallback(d amqp.Delivery, cb AMQPConsumerCallback, autoAck bool) {
@@ -1011,6 +1034,41 @@ func (r *RabbitMQ) generatePublishMessageByDelivery(d *amqp.Delivery, queueName 
 		Headers:       headers,
 	}
 	return pub
+}
+
+// CheckQueueConsumers check if queue has consumers listening
+func (r *RabbitMQ) CheckQueueConsumers(queueName string) int {
+	if "" == queueName {
+		logger.Error.Printf("RabbitMQ %s check queue:%s consumers while giving empty queue name", r.Name, queueName)
+		return 0
+	}
+	r.queuesStatusMutex.RLock()
+	queueStatus, ok := r.queuesStatus[queueName]
+	r.queuesStatusMutex.RUnlock()
+	if false == ok || nil == queueStatus {
+		queueStatus = &RabbitQueueStatus{
+			QueueName:      queueName,
+			RefreshingTime: 0,
+		}
+		r.queuesStatusMutex.Lock()
+		r.queuesStatus[queueName] = queueStatus
+		r.queuesStatusMutex.Unlock()
+	}
+	now := time.Now().Unix()
+	if (queueStatus.Consumers < 1 && now-queueStatus.RefreshingTime > 1) || now-queueStatus.RefreshingTime > AMQPQueueStatusFreshDuration {
+		queue, err := r.Channel.QueueInspect(queueName)
+		if err != nil {
+			logger.Warning.Printf("RabbitMQ %s check queue:%s consumers while could not get rabbit mq queue status", r.Name, queueName)
+			return 0
+		}
+		queueStatus.Consumers = queue.Consumers
+		queueStatus.Messages = queue.Messages
+		queueStatus.RefreshingTime = now
+	}
+	if queueStatus.Consumers < 1 {
+		logger.Warning.Printf("RabbitMQ %s check queue:%s consumers while there is no consumers on publisher queue.", r.Name, queueName)
+	}
+	return queueStatus.Consumers
 }
 
 // GenerateRabbitMQConsumerProxy generate rabbitmq consumer proxy

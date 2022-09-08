@@ -37,17 +37,17 @@ func InitServiceHandler(app *iris.Application) error {
 		return err
 	}
 
-	err = mq.InitMQWithRPC("demo", mq.MQTypePublisher, &mqCfg, getDemoMQConfig())
+	err = mq.InitMQWithRPC("demo", mq.MQTypeConsumer, &mqCfg, getDemoMQConfig())
 	if nil != err {
 		logger.Error.Printf("Initialize consumer %s failed with error:%v", "demo", err)
 		return err
 	}
 
-	err = mq.InitMQWithRPC("rpc-consumer", mq.MQTypeConsumer, &mqCfg, mq.GetMQConfig("rpc-consumer"))
-	if nil != err {
-		logger.Error.Printf("Initialize consumer %s failed with error:%v", "rpc-consumer", err)
-		return err
-	}
+	// err = mq.InitMQWithRPC("biz-consumer", mq.MQTypeConsumer, &mqCfg, mq.GetMQConfig("biz-consumer"))
+	// if nil != err {
+	// 	logger.Error.Printf("Initialize consumer %s failed with error:%v", "biz-consumer", err)
+	// 	return err
+	// }
 
 	for mqInstance := range mq.GetAllMQDriverConfigs() {
 		for _, name := range mq.GetAllCategoryNamesByInstance(mqInstance) {
@@ -103,7 +103,7 @@ func getDemoMQConfig() *mq.Config {
 
 func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) *mqenv.MQPublishMessage {
 	fmt.Println("handling mq service response message...", mqMsg)
-	mqTopic := "rpc-consumer"
+	mqTopic := "biz-consumer"
 	pubMsg := mqenv.MQPublishMessage{
 		Body:          []byte("Responsed testing data"),
 		RoutingKey:    mqMsg.ReplyTo,
@@ -120,11 +120,13 @@ func handleMQServiceMessage(mqMsg mqenv.MQConsumerMessage) *mqenv.MQPublishMessa
 
 func testPublishRPCMessage() {
 	pm := &mqenv.MQPublishMessage{
-		RoutingKey: "demo.bindings.amqprpc",
+		Exchange:   getDemoMQConfig().Exchange.Name,
+		RoutingKey: getDemoMQConfig().BindingKey,
 		Body:       []byte("Testing data"),
 		Response:   make(chan mqenv.MQConsumerMessage),
-		ReplyTo:    mq.GetMQConfig("rpc-consumer").Queue,
+		ReplyTo:    mq.GetMQConfig("biz-consumer").Queue,
 	}
+	fmt.Printf("sending data %s\n", pm.Body)
 	err := mq.PublishMQ("demo", pm)
 	if nil != err {
 		fmt.Printf("WARNING: could not get valid mq instance by demo\n")
@@ -146,7 +148,7 @@ func testPublishWebMessage(ctx iris.Context) {
 	pm := &mqenv.MQPublishMessage{
 		Body:     []byte("Testing data"),
 		Response: make(chan mqenv.MQConsumerMessage),
-		ReplyTo:  mq.GetMQConfig("rpc-consumer").Queue,
+		ReplyTo:  mq.GetMQConfig("biz-consumer").Queue,
 	}
 	err := mq.PublishMQ("demo", pm)
 	if nil != err {

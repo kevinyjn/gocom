@@ -216,6 +216,10 @@ func InitMQWithRPC(topicCategory string, rpcType int, connCfg *mqenv.MQConnector
 	if mqCfg == nil || connCfg == nil {
 		return fmt.Errorf("initialize mq rpc with key:%s rpc_type:%d failed, invalid conn_cofig or invalid mq_config", topicCategory, rpcType)
 	}
+	if nil == GetMQConfig(topicCategory) {
+		SetMQConfig(topicCategory, *mqCfg)
+	}
+
 	if connCfg.Driver == mqenv.DriverTypeAMQP {
 		mqCategoryDriversMutex.Lock()
 		if mqCategoryDrivers[topicCategory] == "" {
@@ -330,9 +334,9 @@ func PublishMQ(mqCategory string, publishMsg *mqenv.MQPublishMessage) error {
 	switch mqDriver {
 	case mqenv.DriverTypeAMQP:
 		if mqConfig.RPCEnabled {
-			rpcInst := rabbitmq.GetRPCRabbitMQ(mqCategory)
+			rpcInst := rabbitmq.GetRPCRabbitMQWithConsumers(mqCategory)
 			if nil == rpcInst {
-				return fmt.Errorf("no RPC rabbitmq instance by %s found", mqCategory)
+				return fmt.Errorf("no RPC rabbitmq instance by %s found or there is no backend consumers ready", mqCategory)
 			}
 			rpcInst.Publish <- publishMsg
 		} else {
