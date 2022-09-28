@@ -25,11 +25,6 @@ import (
 // Constants
 const (
 	CharactorsBase = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-	SizeGB   = 1024 * 1024 * 1024
-	SizeMB   = 1024 * 1024
-	SizeKB   = 1024
-	DecadeKB = 10240
 )
 
 // local variables
@@ -801,25 +796,6 @@ func SubStringFromUTF8(s string, length int, start int, markDots bool) string {
 		return s[startpos:endpos] + "..."
 	}
 	return s[startpos:endpos]
-}
-
-// HumanByteSize convert byte size as human recognizable
-func HumanByteSize(bs int) string {
-	var name string
-	var n float64
-	if bs > SizeGB {
-		name = "GB"
-		n = float64(bs) / SizeGB
-	} else if bs > SizeMB {
-		name = "MB"
-		n = float64(bs) / SizeMB
-	} else if bs > DecadeKB {
-		name = "KB"
-		n = float64(bs) / SizeKB
-	} else {
-		return fmt.Sprintf("%d Bytes", bs)
-	}
-	return fmt.Sprintf("%.2f %s", n, name)
 }
 
 // IsCapital if strings has a capital character

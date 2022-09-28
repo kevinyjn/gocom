@@ -425,7 +425,7 @@ func (r *PulsarMQ) publish(pm *mqenv.MQPublishMessage) error {
 	}
 	if logger.IsDebugEnabled() {
 		if false == strings.HasPrefix(topicName, r.healthzTopicPrefix) {
-			logger.Trace.Printf("PulsarMQ %s publishing message(%s) to %s with %dB body (%s)", r.Name, pm.CorrelationID, topicName, len(pm.Body), pm.Body)
+			logger.Trace.Printf("PulsarMQ %s publishing message(%s) to %s with %dB body (%s)", r.Name, pm.CorrelationID, topicName, len(pm.Body), utils.HumanByteText(pm.Body))
 		}
 	}
 	ctx := context.Background()
@@ -512,7 +512,7 @@ func (r *PulsarMQ) handlePublishMessage(msgID pulsar.MessageID, pm *pulsar.Produ
 	if nil == err {
 		// logger.Trace.Printf("PulsarMQ %s publishing message(%s) %dB succeed %+v", r.Name, pm.Properties[PropertyCorrelationID], len(pm.Payload), pm)
 	} else {
-		logger.Error.Printf("PulsarMQ %s publishing message %dB failed with error:%v message:%s", r.Name, len(pm.Payload), err, pm.Payload)
+		logger.Error.Printf("PulsarMQ %s publishing message %dB failed with error:%v message:%s", r.Name, len(pm.Payload), err, utils.HumanByteText(pm.Payload))
 	}
 }
 
@@ -551,7 +551,9 @@ func (r *PulsarMQ) handleConsumes(cb mqenv.MQConsumerCallback, autoAck bool, con
 	for {
 		msg, err := consumer.Receive(ctx)
 		if nil == err {
-			logger.Debug.Printf("PulsarMQ %s topic:%s received msg %s", r.Name, topicName, msg.Payload())
+			// if logger.IsDebugEnabled() {
+			// 	logger.Debug.Printf("PulsarMQ %s topic:%s received msg %s", r.Name, topicName, utils.HumanByteText(msg.Payload()))
+			// }
 			go r.handleConsumeCallback(consumer, msg, cb, autoAck, consumerTag)
 		} else {
 			logger.Error.Printf("PulsarMQ %s consuming topic:%s failed with error:%v", r.Name, topicName, err)
@@ -665,7 +667,11 @@ func (r *PulsarMQ) handleConsumeCallback(consumer pulsar.Consumer, msg pulsar.Me
 			m.RoutingKey, _ = properties["RoutingKey"]
 		}
 
-		logger.Debug.Printf("PulsarMQ %s received msg(%s) %s", r.Name, m.CorrelationID, m.Body)
+		if logger.IsDebugEnabled() {
+			// logger.Debug.Printf("%v", m.Body)
+			// logger.Debug.Printf("%q", m.Body)
+			logger.Debug.Printf("PulsarMQ %s topic:%s received msg(%s) %s\n%v\n%q", r.Name, m.Queue, m.CorrelationID, utils.HumanByteText(m.Body), m.Body, m.Body)
+		}
 		if "" != m.CorrelationID && "" != m.ReplyTo {
 			r.setReplyNeededMessage(m)
 			resp := cb(m)
@@ -778,9 +784,10 @@ func (r *PulsarMQ) publishTrackerMQMessage(pm *mqenv.MQPublishMessage, typ strin
 	if "" == trackerQueue {
 		return
 	}
-	producer, err := r.ensureProducer(trackerQueue)
+	topicName := r.prepareTopicName(trackerQueue)
+	producer, err := r.ensureProducer(topicName)
 	if nil != err {
-		logger.Error.Printf("PulsarMQ %s ensure tracker queue:%s producer failed with error:%v", r.Name, trackerQueue, err)
+		logger.Error.Printf("PulsarMQ %s ensure tracker queue:%s producer failed with error:%v", r.Name, topicName, err)
 		return
 	}
 	properties := map[string]string{}

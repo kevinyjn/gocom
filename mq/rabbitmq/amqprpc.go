@@ -143,7 +143,7 @@ func handleRPCConsume(deliveries <-chan amqp.Delivery, done chan error) {
 				len(body),
 				d.DeliveryTag,
 				d.CorrelationId,
-				string(body),
+				utils.HumanByteText(body),
 			)
 		}
 		// fmt.Println("---- got delivery message d:", d)

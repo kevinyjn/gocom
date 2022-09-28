@@ -209,7 +209,7 @@ func (worker *KafkaWorker) reply(topic string, message *mqenv.MQPublishMessage, 
 		logger.Error.Println(err)
 	}
 	worker.sendWorker(topic, sendBytes)
-	// logger.Debug.Println("reply " + string(message.Body))
+	// logger.Debug.Println("reply " + utils.HumanByteText(message.Body))
 
 }
 
@@ -218,7 +218,7 @@ func (worker *KafkaWorker) onMessage(packet *KafkaPacket) {
 	// 收到信息有两种情况
 	// 1 发出信息后收到回复,在waitResponseMessage 有通道，把信息发送过去就可以了
 	// 2 订阅topic 后收到的回复
-	// logger.Debug.Println("onMessage body=" + string(packet.Body))
+	// logger.Debug.Println("onMessage body=" + utils.HumanByteText(packet.Body))
 	ch, ok := worker.waitResponseMessage[packet.CorrelationId]
 	if ok {
 		delete(worker.waitResponseMessage, packet.CorrelationId)
@@ -243,7 +243,7 @@ func (worker *KafkaWorker) onMessage(packet *KafkaPacket) {
 				if consumerProxy.Callback != nil {
 					result := consumerProxy.Callback(consumerMessage)
 					// if result != nil {
-					// 	logger.Debug.Println("onMessage result=" + string(result.Body))
+					// 	logger.Debug.Println("onMessage result=" + utils.HumanByteText(result.Body))
 					// 	logger.Debug.Println("onMessage packet.ReplyTo=" + packet.ReplyTo)
 					// }
 					if result != nil && packet.ReplyTo != "" {
@@ -261,7 +261,7 @@ func (worker *KafkaWorker) onMessage(packet *KafkaPacket) {
 func (worker *KafkaWorker) bindToOnMessage(data []byte) {
 	// 私有topic不一定存在，所以worker 会发送信息来创建。
 	// 收到创建的信息忽略掉
-	logger.Debug.Println("bindToOnMessage: " + string(data))
+	logger.Debug.Println("bindToOnMessage: " + utils.HumanByteText(data))
 	if strings.Contains(string(data), "_register_private") {
 		return
 	}

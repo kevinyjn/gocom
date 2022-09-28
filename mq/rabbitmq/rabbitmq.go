@@ -606,7 +606,7 @@ func (r *RabbitMQ) ensurePendings() {
 
 func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 	if r.Channel == nil {
-		logger.Warning.Printf("pending publishing %dB body (%s)", len(pm.Body), pm.Body)
+		logger.Warning.Printf("pending publishing %dB body (%s)", len(pm.Body), utils.HumanByteText(pm.Body))
 		r.pendingPublishes = append(r.pendingPublishes, pm)
 		return nil
 	}
@@ -639,7 +639,7 @@ func (r *RabbitMQ) publish(pm *mqenv.MQPublishMessage) error {
 	}
 	if logger.IsDebugEnabled() {
 		if false == strings.HasPrefix(routingKey, "healthz") {
-			logger.Trace.Printf("publishing message(%s) to %s(%s) with %dB body (%s)", pm.CorrelationID, routingKey, exchangeName, len(pm.Body), pm.Body)
+			logger.Trace.Printf("publishing message(%s) to %s(%s) with %dB body (%s)", pm.CorrelationID, routingKey, exchangeName, len(pm.Body), utils.HumanByteText(pm.Body))
 		}
 	}
 
@@ -758,7 +758,7 @@ func (r *RabbitMQ) handleConsumes(cb AMQPConsumerCallback, autoAck bool, deliver
 				msgLen := len(d.Body)
 				if 4096 > msgLen {
 					logger.Trace.Printf("got %dB delivery: [%v] from rk:%s(%s) %s",
-						msgLen, d.DeliveryTag, d.RoutingKey, d.Exchange, d.Body)
+						msgLen, d.DeliveryTag, d.RoutingKey, d.Exchange, utils.HumanByteText(d.Body))
 				} else {
 					logger.Trace.Printf("got large message %dB delivery: [%v] from rk:%s(%s)",
 						msgLen, d.DeliveryTag, d.RoutingKey, d.Exchange)
@@ -907,7 +907,7 @@ func (r *RabbitMQ) QueryRPC(pm *mqenv.MQPublishMessage) (*mqenv.MQConsumerMessag
 	select {
 	case res := <-pm.Response:
 		if logger.IsDebugEnabled() {
-			logger.Trace.Printf("RabbitMQ %s Got response %s", r.Name, string(res.Body))
+			logger.Trace.Printf("RabbitMQ %s Got response %s", r.Name, utils.HumanByteText(res.Body))
 		}
 		resp = &res
 		timer.Stop()
