@@ -43,6 +43,10 @@ func Init(mqConfigFile string, mqDriverConfigs map[string]mqenv.MQConnectorConfi
 	}
 	if nil != mqDriverConfigs {
 		for connName, cfg := range mqDriverConfigs {
+			if cfg.Disabled {
+				logger.Info.Printf("skip auto loading disabled mq configuration of %s", connName)
+				continue
+			}
 			mqConnConfigsMutex.Lock()
 			_, ok := mqConnConfigs[connName]
 			if !ok {

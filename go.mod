@@ -23,7 +23,6 @@ require (
 	github.com/flosch/pongo2 v0.0.0-20200913210552-0d938eb266f3 // indirect
 	github.com/fluent/fluent-logger-golang v1.6.2
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424 // indirect
-	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/goccy/go-json v0.7.9 // indirect
@@ -39,13 +38,10 @@ require (
 	github.com/iris-contrib/formBinder v5.0.0+incompatible // indirect
 	github.com/iris-contrib/go.uuid v2.0.0+incompatible // indirect
 	github.com/iris-contrib/httpexpect v1.1.2 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88 // indirect
 	github.com/kataras/golog v0.1.7 // indirect
 	github.com/kataras/iris v11.1.1+incompatible
-	github.com/keybase/go-keychain v0.0.0-20220408132150-ad3b4a8fd4a7 // indirect
 	github.com/klauspost/compress v1.15.1 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/lenaten/hl7 v0.0.0-20181009090854-63c5c49a56d9
 	github.com/lib/pq v1.10.3
 	github.com/linkedin/goavro/v2 v2.11.1 // indirect

@@ -44,6 +44,7 @@ type MQConnectorConfig struct {
 	Password     string `yaml:"password" json:"password"`
 	Timeout      int    `yaml:"timeout" json:"timeout"`
 	Heartbeat    int    `yaml:"heartbeat" json:"heartbeat"`
+	Disabled     bool   `yaml:"disabled" json:"disabled"`
 	SSHTunnelDSN string `yaml:"sshTunnel" json:"sshTunnel"`
 }
 
