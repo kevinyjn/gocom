@@ -106,7 +106,7 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 	mqCategoriesByInstance[topicConfig.Instance][topicCategory] = true
 	mqCategoriesByInstanceMutex.Unlock()
 	switch instCnf.Driver {
-	case mqenv.DriverTypeAMQP, mqenv.DriverTypeRabbitMQJinDie:
+	case mqenv.DriverTypeAMQP:
 		amqpCfg := &rabbitmq.AMQPConfig{
 			ConnConfigName:  topicConfig.Instance,
 			Queue:           topicConfig.Queue,
@@ -116,7 +116,6 @@ func InitMQTopic(topicCategory string, topicConfig *Config, mqDriverConfigs map[
 			ExchangeType:    topicConfig.Exchange.Type,
 			BindingKey:      topicConfig.BindingKey,
 			QueueAutoDelete: topicConfig.AutoDelete,
-			Driver:          instCnf.Driver,
 		}
 		if topicConfig.RPCEnabled {
 			return nil

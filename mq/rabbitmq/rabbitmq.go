@@ -798,7 +798,7 @@ func (r *RabbitMQ) getRPCInstance() (*RabbitMQ, error) {
 		return rpcInst, nil
 	}
 	durable := false
-	if r.Config.Driver == mqenv.DriverTypeRabbitMQJinDie {
+	if os.Getenv("_jindie_mq") == "1" {
 		durable = true
 	}
 
