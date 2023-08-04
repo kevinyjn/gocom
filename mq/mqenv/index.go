@@ -10,6 +10,7 @@ const (
 	DriverTypeRabbitMQJinDie = "rabbit_mq_jindie" //金蝶
 	DriverTypeKafka          = "kafka"
 	DriverTypeMock           = "mock"
+	DriverTypePulsar         = "pulsar"
 
 	MQTypeConsumer  = 1
 	MQTypePublisher = 2
@@ -17,6 +18,14 @@ const (
 	MQEventCodeOk     = 0
 	MQEventCodeFailed = -1
 	MQEventCodeClosed = -9
+
+	MQReconnectSeconds        = 1
+	MQQueueStatusFreshSeconds = 30
+)
+
+// Parameter Variables
+var (
+	publishMessageChannelSize = 512
 )
 
 // MQEvent event
@@ -36,6 +45,7 @@ type MQConnectorConfig struct {
 	Password     string `yaml:"password" json:"password"`
 	Timeout      int    `yaml:"timeout" json:"timeout"`
 	Heartbeat    int    `yaml:"heartbeat" json:"heartbeat"`
+	Disabled     bool   `yaml:"disabled" json:"disabled"`
 	SSHTunnelDSN string `yaml:"sshTunnel" json:"sshTunnel"`
 }
 
@@ -90,6 +100,7 @@ type MQConsumerProxy struct {
 	Exclusive   bool
 	NoLocal     bool
 	NoWait      bool
+	Ready       chan bool // notifies if consumer subscribes ready
 }
 
 // GetHeader by key
@@ -162,4 +173,21 @@ func NewConsumerMessageFromPublishMessage(pm *MQPublishMessage) MQConsumerMessag
 		BindData:      nil,
 	}
 	return msg
+}
+
+// GetPublishMessageChannelSize get publishing message channel size for initializing mq publish channel
+func GetPublishMessageChannelSize() int {
+	return publishMessageChannelSize
+}
+
+// SetPublishMessageChannelSize set publishing message channel size for initializing mq publish channel
+func SetPublishMessageChannelSize(value int) int {
+	if value < 1 {
+		value = 1
+	}
+	if value > 65536 {
+		value = 65536
+	}
+	publishMessageChannelSize = value
+	return publishMessageChannelSize
 }

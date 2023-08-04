@@ -22,13 +22,6 @@ func TestUtilsSubUTF8Text(t *testing.T) {
 	testingutil.AssertEquals(t, "种静态强", v4, "sub(15, 19)")
 }
 
-func TestUtilsHumanBytes(t *testing.T) {
-	testingutil.AssertEquals(t, "1.21 GB", utils.HumanByteSize(1024*1024*1024+210*1024*1024+1036), "GB size")
-	testingutil.AssertEquals(t, "1.21 MB", utils.HumanByteSize(1024*1024+210*1024+1036), "MB size")
-	testingutil.AssertEquals(t, "10.21 KB", utils.HumanByteSize(10*1024+220), "KB size")
-	testingutil.AssertEquals(t, "10240 Bytes", utils.HumanByteSize(10240), "Byte size")
-}
-
 func TestUtilsTimer(t *testing.T) {
 	timer1, err1 := utils.NewTimer(10, 100, func(isnt *utils.Timer, tim time.Time, delegate interface{}) {
 		fmt.Println("timer1 triggered ...")
@@ -46,8 +39,12 @@ func TestUtilsTimer(t *testing.T) {
 }
 
 func TestUtilsURLPathJoin(t *testing.T) {
-	url := utils.URLPathJoin("/demo", " ", "", "a/", "/b/", "/c/")
+	url := utils.URLPathJoin("demo", " ", "", "a/", "/b/", "/c/")
+	testingutil.AssertEquals(t, "demo/a/b/c/", url, "url")
+	url = utils.URLPathJoin("/demo", " ", "", "a/", "/b/", "/c/")
 	testingutil.AssertEquals(t, "/demo/a/b/c/", url, "url")
+	url = utils.URLPathJoin("", "a/", "/b/", "/c/")
+	testingutil.AssertEquals(t, "a/b/c/", url, "url")
 	url = utils.URLPathJoin("http://localhost/demo/", " ", "/", "a", "/b/", "c/")
 	testingutil.AssertEquals(t, "http://localhost/demo/a/b/c/", url, "url")
 }

@@ -36,7 +36,7 @@ func InitServiceHandler(app *iris.Application) error {
 	}
 	mqTopic = "stage2"
 	configs := map[string]mqenv.MQConnectorConfig{
-		"stage2": mqCfg,
+		mqTopic: mqCfg,
 	}
 	mqConfig = getDemoMQConfig()
 	mq.GetMQRoutes()[mqTopic] = *mqConfig
@@ -56,6 +56,31 @@ func InitServiceHandler(app *iris.Application) error {
 		logger.Error.Printf("Initialize consumer %s failed with error:%v", mqTopic, err)
 		return err
 	}
+
+	mqTopic = "stage3"
+	configs = map[string]mqenv.MQConnectorConfig{
+		mqTopic: mqCfg,
+	}
+	mqConfig = getDemoMQConfig()
+	mqConfig.Instance = mqTopic
+	mqConfig.Queue = "system_a1012"
+	mq.GetMQRoutes()[mqTopic] = *mqConfig
+	err = mq.InitMQTopic(mqTopic, mqConfig, configs)
+	if nil != err {
+		logger.Error.Printf("Initialize consumer %s failed with error:%v", mqTopic, err)
+		return err
+	}
+	consumerProxy3 := mqenv.MQConsumerProxy{
+		Queue:       mqConfig.Queue,
+		Callback:    handleMQServiceMessage2,
+		ConsumerTag: mqTopic,
+		AutoAck:     false,
+	}
+	err = mq.ConsumeMQ(mqTopic, &consumerProxy3)
+	// if nil != err {
+	// 	logger.Error.Printf("Initialize consumer %s failed with error:%v", mqTopic, err)
+	// 	return err
+	// }
 
 	go func() {
 		ticker1 := time.NewTimer(time.Second * 1)
@@ -94,7 +119,7 @@ func handleMQServiceMessage(cm mqenv.MQConsumerMessage) *mqenv.MQPublishMessage 
 	pm := &mqenv.MQPublishMessage{
 		Body: []byte("2. " + body),
 	}
-	resp, err := mq.QueryMQRPC("stage2", pm)
+	resp, err := mq.QueryMQ("stage2", pm)
 	if nil != err {
 		fmt.Printf("WARNING: query biz producer failed with error:%v\n", err)
 		return mq.NewMQResponseMessage([]byte(err.Error()), &cm)
@@ -114,7 +139,7 @@ func testPublishRPCMessage() {
 	pm := &mqenv.MQPublishMessage{
 		Body: []byte("1. Testing data"),
 	}
-	resp, err := mq.QueryMQRPC("biz-consumer", pm)
+	resp, err := mq.QueryMQ("biz-consumer", pm)
 	if nil != err {
 		fmt.Printf("WARNING: query biz consumer rpc failed with error:%v\n", err)
 	} else {
@@ -126,7 +151,7 @@ func testPublishWebMessage(ctx iris.Context) {
 	pm := &mqenv.MQPublishMessage{
 		Body: []byte("1. Testing data"),
 	}
-	resp, err := mq.QueryMQRPC("biz-consumer", pm)
+	resp, err := mq.QueryMQ("biz-consumer", pm)
 	if nil != err {
 		ctx.WriteString(fmt.Sprintf("query failed with error:%v", err))
 	} else {

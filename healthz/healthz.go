@@ -279,7 +279,10 @@ func handlerHealthz(ctx iris.Context) {
 
 func initHealthzMQConsumer() {
 	mqconfs := mq.GetAllMQDriverConfigs()
-	for instName := range mqconfs {
+	for instName, connConf := range mqconfs {
+		if connConf.Driver != mqenv.DriverTypeAMQP {
+			continue
+		}
 		category := fmt.Sprintf("mq-%s-healthz", instName)
 		mqconf := mq.Config{
 			Instance: instName,

@@ -25,11 +25,6 @@ import (
 // Constants
 const (
 	CharactorsBase = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-	SizeGB   = 1024 * 1024 * 1024
-	SizeMB   = 1024 * 1024
-	SizeKB   = 1024
-	DecadeKB = 10240
 )
 
 // local variables
@@ -386,8 +381,14 @@ func URLDecode(val string) string {
 // URLPathJoin slices
 func URLPathJoin(path string, paths ...string) string {
 	path = strings.Trim(path, " ")
-	results := []string{path}
-	endsWithSep := len(path) > 0 && '/' == path[len(path)-1]
+	results := []string{}
+	endsWithSep := false
+	if len(path) > 0 {
+		results = append(results, path)
+		if '/' == path[len(path)-1] {
+			endsWithSep = true
+		}
+	}
 	if len(paths) > 0 {
 		for _, p := range paths {
 			p = strings.Trim(p, " ")
@@ -404,7 +405,11 @@ func URLPathJoin(path string, paths ...string) string {
 				if endsWithSep {
 					results = append(results, p)
 				} else {
-					results = append(results, "/"+p)
+					if len(results) > 0 {
+						results = append(results, "/"+p)
+					} else {
+						results = append(results, p)
+					}
 				}
 			}
 			endsWithSep = '/' == p[len(p)-1]
@@ -791,25 +796,6 @@ func SubStringFromUTF8(s string, length int, start int, markDots bool) string {
 		return s[startpos:endpos] + "..."
 	}
 	return s[startpos:endpos]
-}
-
-// HumanByteSize convert byte size as human recognizable
-func HumanByteSize(bs int) string {
-	var name string
-	var n float64
-	if bs > SizeGB {
-		name = "GB"
-		n = float64(bs) / SizeGB
-	} else if bs > SizeMB {
-		name = "MB"
-		n = float64(bs) / SizeMB
-	} else if bs > DecadeKB {
-		name = "KB"
-		n = float64(bs) / SizeKB
-	} else {
-		return fmt.Sprintf("%d Bytes", bs)
-	}
-	return fmt.Sprintf("%.2f %s", n, name)
 }
 
 // IsCapital if strings has a capital character

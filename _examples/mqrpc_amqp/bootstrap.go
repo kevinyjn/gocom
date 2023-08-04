@@ -34,7 +34,7 @@ func main() {
 	defer accessLoggerClose()
 	app.Use(accessLogger)
 	app.RegisterView(iris.HTML(config.TemplateViewPath, config.TemplateViewEndfix))
-	app.Favicon(config.Favicon)
+	// app.Favicon(config.Favicon)
 	app.StaticWeb(config.StaticRoute, config.StaticAssets)
 	app.Run(iris.Addr(listenAddr), iris.WithoutServerError(iris.ErrServerClosed))
 }
