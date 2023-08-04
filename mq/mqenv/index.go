@@ -6,9 +6,10 @@ import (
 
 // Constants
 const (
-	DriverTypeAMQP  = "rabbitmq"
-	DriverTypeKafka = "kafka"
-	DriverTypeMock  = "mock"
+	DriverTypeAMQP           = "rabbitmq"
+	DriverTypeRabbitMQJinDie = "rabbit_mq_jindie" //金蝶
+	DriverTypeKafka          = "kafka"
+	DriverTypeMock           = "mock"
 
 	MQTypeConsumer  = 1
 	MQTypePublisher = 2

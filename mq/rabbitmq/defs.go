@@ -26,6 +26,7 @@ type AMQPConfig struct {
 	ExchangeType    string
 	BindingKey      string
 	QueueAutoDelete bool
+	Driver          string
 }
 
 // RabbitConsumerProxy consumer proxy

@@ -619,13 +619,17 @@ func (r *RabbitMQ) getRPCInstance() (*RabbitMQ, error) {
 	if ok {
 		return rpcInst, nil
 	}
+	durable := false
+	if r.Config.Driver == mqenv.DriverTypeRabbitMQJinDie {
+		durable = true
+	}
 
 	config := &AMQPConfig{
 		ConnConfigName:  r.Config.ConnConfigName,
 		Queue:           fmt.Sprintf("rpc-%s-%s", r.hostName, utils.RandomString(8)),
 		ExchangeName:    "",
 		ExchangeType:    "topic",
-		QueueDurable:    false,
+		QueueDurable:    durable,
 		BindingExchange: false,
 		BindingKey:      "",
 		QueueAutoDelete: true,
