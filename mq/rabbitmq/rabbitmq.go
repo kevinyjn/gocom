@@ -449,7 +449,7 @@ func (r *RabbitMQ) initConn() error {
 		return err
 	}
 
-	go func() {
+	func() {
 		ticker := time.NewTicker(AMQPReconnectDuration * time.Second)
 		for nil != ticker {
 			select {
