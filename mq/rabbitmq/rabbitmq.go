@@ -21,6 +21,8 @@ import (
 // Constants
 const (
 	ChannelConsumerDeliveryCheckIntervalSeconds = int64(9)
+	JinDie                                      = "_jindie_mq" // 获取金蝶环境变量的名字
+
 )
 
 // Variables
@@ -331,6 +333,12 @@ func (r *RabbitMQ) Run() {
 				r.consumersMutex.RLock()
 				if nil != r.consumers {
 					for qname, cm := range r.consumers {
+						// v := os.Getenv(JinDie)
+						// fmt.Println(v)
+						if os.Getenv(JinDie) == "1" {
+							// 因为金蝶的mq 在调用 QueueInspect 后并不会返回队列订阅者的数量，所以暂时屏蔽掉这个。等对方加好
+							continue
+						}
 						q, err := r.Channel.QueueInspect(qname)
 						now := time.Now().Unix()
 						interval := now - cm._lastTimer
@@ -798,7 +806,7 @@ func (r *RabbitMQ) getRPCInstance() (*RabbitMQ, error) {
 		return rpcInst, nil
 	}
 	durable := false
-	if os.Getenv("_jindie_mq") == "1" {
+	if os.Getenv(JinDie) == "1" {
 		durable = true
 	}
 
