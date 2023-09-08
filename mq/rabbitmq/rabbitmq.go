@@ -125,6 +125,9 @@ func inspectQueue(channel *amqp.Channel, amqpCfg *AMQPConfig) (queueDescribes, e
 		queueInfo.name = ""
 		queueInfo.isBroadcast = true
 		// exclusive = true
+		if os.Getenv(JinDie) == "1" {
+			queueInfo.durable = true
+		}
 	} else if "" == queueInfo.name {
 		queueInfo.autoDelete = true
 		queueInfo.durable = false
